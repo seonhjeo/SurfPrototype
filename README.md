@@ -43,7 +43,8 @@ npm run preview
 
 - 테스트 주소: [surf-prototype.vercel.app](https://surf-prototype.vercel.app/)
 - Vercel 프로젝트: [hoya14 / surf-prototype](https://vercel.com/hoya14/surf-prototype)
-- Git 연결과 `main`의 첫 Production 배포 성공을 2026-09-29에 확인했습니다.
+- 2026-09-29 검증: GitHub CI, `main` Production 자동 배포, 작업 브랜치 Preview 자동 배포 성공.
+- 초기 Preview 확인: [검증용 배포](https://surf-prototype-js6kgsj5u-hoya14.vercel.app)
 
 Vercel 설정은 다음 값을 사용합니다.
 
@@ -69,6 +70,9 @@ GitHub Actions는 `npm ci`와 `npm run build`를 수행합니다. 배포는 Verc
 필요해지면 `main` 보호 규칙에 `Typecheck and build`를 필수 검사로 지정합니다.
 
 배포가 실패하면 GitHub Actions와 Vercel Build Logs를 각각 확인합니다. 되돌리기는 문제 커밋의 revert를 push해 다시 배포하거나 Vercel의 이전 배포 복구 기능을 사용합니다.
+
+초기화 당시 로컬 HTTPS Git 인증에는 `workflow` 권한이 없어 CI 파일을 GitHub 웹 편집기로 등록했습니다.
+일반 코드 push는 정상입니다. `.github/workflows/` 파일을 수정할 때는 GitHub 웹 편집기 또는 workflow 변경 권한을 갖춘 Git 인증을 사용합니다.
 
 ## 개발 원칙
 
