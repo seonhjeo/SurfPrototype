@@ -1,0 +1,39 @@
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #18383d;
+  background: #f4f5ee;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { max-width: 1080px; margin: 0 auto; padding: 54px 36px 24px; }
+header, .toolbar, footer { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+header { padding-bottom: 34px; border-bottom: 1px solid #ced6cf; }
+.eyebrow { margin: 0 0 14px; font-size: 11px; font-weight: 700; letter-spacing: 0.16em; }
+h1 { margin: 0; font-size: 52px; line-height: 1; letter-spacing: -0.06em; }
+h1 span { margin-left: 14px; font-size: 18px; font-weight: 400; letter-spacing: -0.03em; color: #688080; }
+.status { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.status::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #6d9354; }
+.section-heading { padding: 30px 0 20px; }
+h2 { font-size: 17px; font-weight: 600; margin: 0 0 8px; }
+.section-heading p { margin: 0; font-size: 13px; color: #688080; }
+#game { position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 8px; background: #102c35; touch-action: none; }
+#game canvas { display: block; }
+#game:focus-visible, button:focus-visible { outline: 3px solid #5b886e; outline-offset: 4px; }
+.toolbar { padding: 18px 0 28px; }
+.toolbar p { max-width: 660px; margin: 0; color: #688080; font-size: 12px; line-height: 1.7; }
+button { flex-shrink: 0; min-height: 44px; padding: 10px 16px; border: 1px solid #bdc9be; border-radius: 6px; background: transparent; color: inherit; font: inherit; font-size: 12px; cursor: pointer; }
+button:hover { background: #e5eadc; }
+footer { border-top: 1px solid #ced6cf; padding-top: 20px; font-size: 10px; letter-spacing: 0.08em; color: #688080; }
+
+@media (max-width: 600px) {
+  main { padding: 28px 18px 20px; }
+  header { align-items: flex-start; gap: 10px; padding-bottom: 24px; }
+  h1 { font-size: 42px; }
+  h1 span { display: block; margin: 8px 0 0; font-size: 15px; }
+  .status { font-size: 11px; }
+  .toolbar { align-items: flex-start; flex-direction: column; gap: 14px; }
+}

@@ -1,0 +1,22 @@
+# Local machine files
+.DS_Store
+Thumbs.db
+*.log
+
+# Dependencies and build output
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Local deployment state and secrets
+.vercel/
+.env
+.env.*
+!.env.example
+
+# Local editor configuration
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
