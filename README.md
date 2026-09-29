@@ -34,7 +34,7 @@ npm run preview
 | `src/style.css`, `index.html` | 테스트 화면과 안내 |
 | `public/` | 원본 이름 그대로 배포할 에셋 |
 | `AGENTS.md`, `AgentDocs/` | 지침 관리·연결 링크와 분야별 작업 지침 |
-| `Docs/agents.md`, `Docs/` | 기획서·작업 전·작업 완료 문서와 파트별 인덱스 |
+| `Docs/agents.md`, `Docs/` | 기획서·개발문서, 개발단위별 완료 체크와 파트별 인덱스 |
 | `.github/workflows/ci.yml` | GitHub Actions 타입 검사·빌드 |
 | `vercel.json` | Vercel 설치·빌드·출력 설정 |
 
