@@ -41,7 +41,9 @@ npm run preview
 
 저장소: [seonhjeo/SurfPrototype](https://github.com/seonhjeo/SurfPrototype)
 
-배포 연결 상태: 초기 연결 진행 중. 배포 성공 확인 후 URL을 기록합니다.
+- 테스트 주소: [surf-prototype.vercel.app](https://surf-prototype.vercel.app/)
+- Vercel 프로젝트: [hoya14 / surf-prototype](https://vercel.com/hoya14/surf-prototype)
+- Git 연결과 `main`의 첫 Production 배포 성공을 2026-09-29에 확인했습니다.
 
 Vercel 설정은 다음 값을 사용합니다.
 
