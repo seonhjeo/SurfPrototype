@@ -33,7 +33,8 @@ npm run preview
 | `src/game/PrototypeScene.ts` | 렌더링·키보드·포인터 확인용 씬 |
 | `src/style.css`, `index.html` | 테스트 화면과 안내 |
 | `public/` | 원본 이름 그대로 배포할 에셋 |
-| `AGENTS.md` | 에이전트 작업 범위와 검증 규칙 |
+| `AGENTS.md`, `AgentDocs/` | 지침 관리·연결 링크와 분야별 작업 지침 |
+| `Docs/agents.md`, `Docs/` | 기획서·작업 전·작업 완료 문서와 파트별 인덱스 |
 | `.github/workflows/ci.yml` | GitHub Actions 타입 검사·빌드 |
 | `vercel.json` | Vercel 설치·빌드·출력 설정 |
 
@@ -61,11 +62,17 @@ Vercel 설정은 다음 값을 사용합니다.
 
 Vercel에서 이 저장소를 Import하고 Git 연동을 유지하면 다음 흐름으로 테스트합니다.
 
-1. 작업 브랜치에서 수정하고 로컬 빌드를 확인합니다.
-2. 브랜치를 push하고 PR을 열면 GitHub CI와 Vercel Preview에서 확인합니다.
-3. 검증된 변경을 `main`으로 병합하면 Vercel Production에 자동 배포됩니다.
+1. 최신 `dev`에서 새 개발 브랜치를 만들고 구현·검증합니다.
+2. 구현 후 로컬 서버를 실행하고 브라우저를 팝업해 사용자가 직접 테스트하도록 합니다.
+3. 사용자가 테스트를 완료하고 `dev` 병합을 요청한 때에만 병합합니다. 사용한 개발 브랜치는 유지합니다.
+4. `main` 대상 PR은 사용자가 요청한 경우에만 만들며, 다른 브랜치를 `main`에 임의로 병합하지 않습니다.
 
-GitHub Actions는 `npm ci`와 `npm run build`를 수행합니다. 배포는 Vercel Git 연동이 담당하며 별도의 Vercel 토큰을 GitHub Secrets에 넣지 않습니다.
+문서만 수정하는 작업은 기존 예외에 따라 `main`에서 직접 작업·커밋·push합니다.
+`main` push는 Production, 다른 브랜치 push는 Preview 배포를 유발합니다. Preview는 사용자 로컬 테스트를 대신하지 않습니다.
+상세 절차는 [Git·테스트 지침](AgentDocs/GitAndTesting.md)을 따릅니다.
+
+GitHub Actions는 현재 `main` push, PR, 수동 실행에서 `npm ci`와 `npm run build`를 수행합니다. `dev` push 전용 트리거는 아직 없습니다.
+배포는 Vercel Git 연동이 담당하며 별도의 Vercel 토큰을 GitHub Secrets에 넣지 않습니다.
 **CI와 Vercel은 독립적으로 실행됩니다.** 현재 CI 성공을 강제하는 브랜치 보호나 배포 게이트는 설정하지 않았습니다.
 필요해지면 `main` 보호 규칙에 `Typecheck and build`를 필수 검사로 지정합니다.
 
