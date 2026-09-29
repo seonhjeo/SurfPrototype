@@ -65,9 +65,9 @@ Vercel에서 이 저장소를 Import하고 Git 연동을 유지하면 다음 흐
 1. 최신 `dev`에서 새 개발 브랜치를 만들고 구현·검증합니다.
 2. 구현 후 로컬 서버를 실행하고 브라우저를 팝업해 사용자가 직접 테스트하도록 합니다.
 3. 사용자가 테스트를 완료하고 `dev` 병합을 요청한 때에만 병합합니다. 사용한 개발 브랜치는 유지합니다.
-4. `main` 대상 PR은 사용자가 요청한 경우에만 만들며, 다른 브랜치를 `main`에 임의로 병합하지 않습니다.
+4. `main`에 대한 직접 push와 직접 merge는 금지합니다. `main` 대상 PR은 사용자가 요청한 경우에만 만들며, PR 생성 요청은 병합 권한을 포함하지 않습니다.
 
-문서만 수정하는 작업은 기존 예외에 따라 `main`에서 직접 작업·커밋·push합니다.
+지침·문서만 수정하는 작업은 최신 `dev`에서 직접 작업·커밋하고 `dev`에 push합니다. 문서 변경에도 `main` 직접 push·merge 금지는 동일하게 적용됩니다.
 `main` push는 Production, 다른 브랜치 push는 Preview 배포를 유발합니다. Preview는 사용자 로컬 테스트를 대신하지 않습니다.
 상세 절차는 [Git·테스트 지침](AgentDocs/GitAndTesting.md)을 따릅니다.
 
@@ -76,7 +76,7 @@ GitHub Actions는 현재 `main` push, PR, 수동 실행에서 `npm ci`와 `npm r
 **CI와 Vercel은 독립적으로 실행됩니다.** 현재 CI 성공을 강제하는 브랜치 보호나 배포 게이트는 설정하지 않았습니다.
 필요해지면 `main` 보호 규칙에 `Typecheck and build`를 필수 검사로 지정합니다.
 
-배포가 실패하면 GitHub Actions와 Vercel Build Logs를 각각 확인합니다. 되돌리기는 문제 커밋의 revert를 push해 다시 배포하거나 Vercel의 이전 배포 복구 기능을 사용합니다.
+배포가 실패하면 GitHub Actions와 Vercel Build Logs를 각각 확인합니다. 복구 변경도 개발 브랜치에서 준비하고 [Git·테스트 지침](AgentDocs/GitAndTesting.md)에 따라 반영합니다.
 
 초기화 당시 로컬 HTTPS Git 인증에는 `workflow` 권한이 없어 CI 파일을 GitHub 웹 편집기로 등록했습니다.
 일반 코드 push는 정상입니다. `.github/workflows/` 파일을 수정할 때는 GitHub 웹 편집기 또는 workflow 변경 권한을 갖춘 Git 인증을 사용합니다.
