@@ -54,12 +54,18 @@ h1, h2, p { margin: 0; }
 .hero-art { margin: -3px -4px 16px; position: relative; height: 171px; display: flex; align-items: center; justify-content: center; }
 .crest-art { height: 100%; width: 100%; max-width: 310px; }
 .art-label { position: absolute; bottom: 1px; font-size: 7px; letter-spacing: .18em; color: #a0aca5; }
-.mode-card { display: flex; gap: 12px; align-items: center; background: #21323d; border: 1px solid #485549; border-radius: 10px; padding: 15px 13px; margin-bottom: 13px; }
+.mode-card { display: flex; gap: 12px; align-items: center; background: #21323d; border: 1px solid #485549; border-radius: 10px; padding: 12px 13px; margin-bottom: 8px; }
 .mode-icon { font-size: 27px; color: #dccb8d; width: 39px; height: 43px; display: grid; place-items: center; border: 1px solid #ffffff17; border-radius: 8px; }
 .mode-card .eyebrow { font-size: 7px; color: #a6b294; }
 .mode-card h2 { font-size: 16px; letter-spacing: -.035em; margin-top: 3px; }
 .mode-card p { font-size: 10px; color: #a2b2b6; margin-top: 5px; }
-.selected-pill { margin-left: auto; color: var(--lime); font-size: 9px; padding: 5px 6px; border: 1px solid #7f956150; border-radius: 5px; white-space: nowrap; }
+.mode-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 13px; }
+.mode-option { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 6px; min-height: 59px; padding: 10px; text-align: left; border: 1px solid #42545d; border-radius: 8px; background: #1c2d38; }
+.mode-option strong { font-size: 12px; }
+.mode-option small { color: #a2b2b6; font-size: 9px; line-height: 1.5; word-break: keep-all; }
+.mode-option.selected { border-color: var(--lime); background: #2a3d3b; }
+.mode-option.selected strong { color: var(--lime); }
+.mode-option:hover:not(:disabled) { background: #304542; }
 .ai-button { min-height: 53px; font-size: 14px; }
 .ai-button > span:last-child { font-size: 22px; font-weight: 400; }
 .private-heading { display: flex; align-items: center; gap: 12px; margin: 23px 0 12px; color: #8da1ab; font-size: 10px; }

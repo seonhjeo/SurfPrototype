@@ -1,8 +1,8 @@
-import type { MapId, Side, UnitId, WeatherId } from './game/data.ts';
+import type { GameModeId, MapId, Side, UnitId, WeatherId } from './game/data.ts';
 import type { BattleState } from './game/simulation.ts';
 
 export type RoomRequest =
-  | { type: 'create' }
+  | { type: 'create'; gameMode: GameModeId }
   | { type: 'join'; code: string }
   | { type: 'deck'; deck: UnitId[] }
   | { type: 'ready'; ready: boolean }
@@ -15,6 +15,7 @@ export interface RoomStateMessage {
   code: string;
   side: Side;
   phase: 'waiting' | 'battle' | 'result';
+  gameMode: GameModeId;
   map: MapId;
   weather: WeatherId;
   deck: UnitId[];

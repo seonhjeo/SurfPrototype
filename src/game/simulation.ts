@@ -1,11 +1,11 @@
 import {
-  UNITS, MAPS, WEATHER, SP_START, SP_MAX, SP_REGEN, MATCH_DURATION,
+  UNITS, MAPS, WEATHER, GAME_MODES, SP_MAX, MATCH_DURATION,
   FORT_HP, WAVE_FIRST, WAVE_INTERVAL, WAVE_GROWTH, PROJECTILE_SPEED,
   PLAYER_RADIUS, MONSTER_RADIUS, BOSS_RADIUS, FORT_RADIUS,
   SKILLS, BASIC_ATTACK_SHAPES, STATUS, completeDeck,
 } from './data.ts';
-import type { Side, UnitId, MapId, WeatherId, MonsterDefinition } from './data.ts';
-export type { Side, UnitId, MapId, WeatherId } from './data.ts';
+import type { Side, UnitId, GameModeId, MapId, WeatherId, MonsterDefinition } from './data.ts';
+export type { Side, UnitId, GameModeId, MapId, WeatherId } from './data.ts';
 
 export const ARENA_WIDTH = 12;
 export const ARENA_HEIGHT = 20;
@@ -43,7 +43,7 @@ export interface IceZone extends Point {
 export interface Effect extends Point { kind: string; expiresAt: number; side?: EntitySide; radius?: number }
 export interface BossWarning extends Point { spawnAt: number; targetSide: Side }
 export interface BattleState {
-  time: number; map: MapId; weather: WeatherId; decks: Record<Side, UnitId[]>;
+  time: number; gameMode: GameModeId; map: MapId; weather: WeatherId; decks: Record<Side, UnitId[]>;
   sp: Record<Side, number>; forts: Record<Side, Fort>; units: UnitEntity[];
   projectiles: Projectile[]; zones: IceZone[]; effects: Effect[];
   wave: number; warnings: BossWarning[];
@@ -51,7 +51,7 @@ export interface BattleState {
 }
 export interface SimulationOptions {
   map: MapId; weather: WeatherId; decks: Record<Side, UnitId[]>;
-  aiSides?: Side[]; seed?: number;
+  gameMode?: GameModeId; aiSides?: Side[]; seed?: number;
 }
 interface Target extends Point { id: TargetId; side: EntitySide; hp: number; unit?: UnitEntity; fort?: Fort }
 
@@ -76,11 +76,13 @@ export class Simulation {
   constructor(options: SimulationOptions) {
     this.randomState = (options.seed ?? 123456789) >>> 0;
     this.aiSides = options.aiSides ?? [];
+    const gameMode = options.gameMode ?? 'standard';
+    const mode = GAME_MODES[gameMode];
     const makeFort = (y: number): Fort => ({ x: 6, y, hp: FORT_HP, maxHp: FORT_HP, burn: null, iceDamageAt: -100 });
     this.state = {
-      time: 0, map: options.map, weather: options.weather,
+      time: 0, gameMode, map: options.map, weather: options.weather,
       decks: { player: completeDeck(options.decks.player, () => this.random()), enemy: completeDeck(options.decks.enemy, () => this.random()) },
-      sp: { player: SP_START, enemy: SP_START },
+      sp: { player: mode.initialSp, enemy: mode.initialSp },
       forts: { player: makeFort(19), enemy: makeFort(1) }, units: [], projectiles: [],
       zones: [], effects: [], wave: 0, warnings: [], result: null,
     };
@@ -145,7 +147,8 @@ export class Simulation {
   private step(dt: number): void {
     this.state.time = Math.min(MATCH_DURATION, Math.round((this.state.time + dt) / FIXED_STEP) * FIXED_STEP);
     const now = this.state.time;
-    for (const side of SIDES) this.state.sp[side] = Math.min(SP_MAX, this.state.sp[side] + SP_REGEN * dt);
+    const spRegen = GAME_MODES[this.state.gameMode].spRegen;
+    for (const side of SIDES) this.state.sp[side] = Math.min(SP_MAX, this.state.sp[side] + spRegen * dt);
     this.spawnWaves();
     for (const side of this.aiSides) this.updateAI(side);
     this.updatePersistentEffects();
@@ -486,7 +489,9 @@ export class Simulation {
     const pressure = this.state.units.filter((unit) => unit.hp > 0 && unit.side !== side && (unit.side !== 'neutral' || unit.targetSide === side) && distance(unit, fort) < 6);
     const deck = this.state.decks[side];
     const expensive = deck.filter((id) => UNITS[id].cost >= 30);
-    const saving = !pressure.length && expensive.length > 0 && this.aiSummons[side] % 5 >= 3;
+    // Without passive income, deploy affordable units until kills can fund an expensive unit.
+    const canSave = GAME_MODES[this.state.gameMode].spRegen > 0 || this.state.sp[side] >= 30 - EPS;
+    const saving = canSave && !pressure.length && expensive.length > 0 && this.aiSummons[side] % 5 >= 3;
     if (saving && this.state.sp[side] < 30 - EPS) return;
     const affordable = deck.filter((id) => UNITS[id].cost <= this.state.sp[side] + EPS);
     if (!affordable.length) return;

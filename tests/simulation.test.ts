@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Simulation, FIXED_STEP, ARENA_WIDTH, ARENA_HEIGHT } from '../src/game/simulation.ts';
 import type { UnitEntity } from '../src/game/simulation.ts';
-import { UNITS, MAPS, SP_MAX, FORT_HP, WAVE_FIRST, WAVE_INTERVAL, WAVE_GROWTH } from '../src/game/data.ts';
-import type { UnitId, Side, WeatherId, MapId } from '../src/game/data.ts';
+import { UNITS, MAPS, GAME_MODES, SP_MAX, FORT_HP, WAVE_FIRST, WAVE_INTERVAL, WAVE_GROWTH, MATCH_DURATION } from '../src/game/data.ts';
+import type { UnitId, Side, GameModeId, WeatherId, MapId } from '../src/game/data.ts';
 
 const deck: UnitId[] = ['warrior', 'archer', 'hunter', 'knight', 'commander'];
-const create = (weather: WeatherId = 'sunny', map: MapId = 'desert', aiSides: Side[] = []) => new Simulation({ map, weather, decks: { player: [...deck], enemy: [...deck] }, aiSides, seed: 23 });
+const create = (weather: WeatherId = 'sunny', map: MapId = 'desert', aiSides: Side[] = [], gameMode?: GameModeId) => new Simulation({ map, weather, decks: { player: [...deck], enemy: [...deck] }, gameMode, aiSides, seed: 23 });
 const near = (actual: number, expected: number, epsilon = 1e-6) => assert.ok(Math.abs(actual - expected) <= epsilon, `${actual} != ${expected}`);
 
 // Combat fixtures use the public state so focused scenarios do not require waiting
@@ -46,8 +46,11 @@ test('summons enforce selected deck, available SP, halves and fort collision wit
 
 test('economy regens exactly one SP/sec, caps, and snapshots are isolated JSON', () => {
   const sim = create();
+  assert.equal(sim.state.gameMode, 'standard');
+  assert.deepEqual(sim.state.sp, { player: 5, enemy: 5 });
   sim.update(3);
   near(sim.state.sp.player, 8);
+  near(sim.state.sp.enemy, 8);
   sim.state.sp.player = 49.9;
   sim.update(1);
   assert.equal(sim.state.sp.player, SP_MAX);
@@ -57,12 +60,56 @@ test('economy regens exactly one SP/sec, caps, and snapshots are isolated JSON',
   assert.deepEqual(JSON.parse(JSON.stringify(copy)), copy);
 });
 
+test('explicit standard mode preserves default economy and limited SP starts both sides at 20 without regeneration', () => {
+  const standard = create('sunny', 'desert', [], 'standard');
+  const legacy = create();
+  standard.update(30); legacy.update(30);
+  assert.deepEqual(standard.snapshot(), legacy.snapshot());
+  const limited = create('sunny', 'desert', [], 'limited-sp');
+  assert.equal(limited.state.gameMode, 'limited-sp');
+  assert.deepEqual(limited.state.sp, { player: 20, enemy: 20 });
+  limited.update(30);
+  assert.deepEqual(limited.state.sp, { player: 20, enemy: 20 });
+  assert.equal(limited.snapshot().gameMode, 'limited-sp');
+});
+
+test('limited SP uses unchanged summon costs and rejects unaffordable or invalid input without charging either side', () => {
+  const sim = create('sunny', 'desert', [], 'limited-sp');
+  for (const side of ['player', 'enemy'] as Side[]) {
+    assert.equal(sim.summon(side, 'commander'), false);
+    assert.equal(sim.summon(side, 'warrior', { x: 6, y: side === 'player' ? 5 : 15 }), false);
+    assert.equal(sim.state.sp[side], 20);
+    assert.equal(sim.summon(side, 'knight'), true);
+    assert.equal(sim.state.sp[side], 10);
+    assert.equal(sim.summon(side, 'warrior'), true);
+    assert.equal(sim.state.sp[side], 5);
+    assert.equal(sim.summon(side, 'hunter'), true);
+    assert.equal(sim.state.sp[side], 2);
+    assert.equal(sim.summon(side, 'hunter'), false);
+    assert.equal(sim.state.sp[side], 2);
+  }
+  sim.update(1);
+  assert.deepEqual(sim.state.sp, { player: 2, enemy: 2 });
+});
+
 test('fixed-step state is independent of frame partition and seeded AI is deterministic', () => {
-  const first = create('rain', 'forest', ['player', 'enemy']);
-  const second = create('rain', 'forest', ['player', 'enemy']);
-  first.update(60);
-  for (let frame = 0; frame < 3600; frame++) second.update(1 / 60);
-  assert.deepEqual(first.snapshot(), second.snapshot());
+  for (const gameMode of ['standard', 'limited-sp'] as GameModeId[]) {
+    const first = create('rain', 'forest', ['player', 'enemy'], gameMode);
+    const second = create('rain', 'forest', ['player', 'enemy'], gameMode);
+    first.update(60);
+    for (let frame = 0; frame < 3600; frame++) second.update(1 / 60);
+    assert.deepEqual(first.snapshot(), second.snapshot());
+  }
+});
+
+test('limited SP AI spends affordable reserves instead of waiting for passive income after three summons', () => {
+  const savingDeck: UnitId[] = ['hunter', 'warrior', 'archer', 'commander', 'archmage'];
+  const sim = new Simulation({ map: 'desert', weather: 'sunny', gameMode: 'limited-sp', decks: { player: savingDeck, enemy: savingDeck }, aiSides: ['enemy'], seed: 23 });
+  sim.update(4);
+  assert.equal(sim.state.wave, 0, 'no neutral pressure or kill rewards before the first wave');
+  assert.ok(sim.state.units.filter((unit) => unit.side === 'enemy').length >= 4, 'AI continues summoning affordable units after its third summon');
+  assert.ok(sim.state.sp.enemy < UNITS.hunter.cost, 'AI spends the remaining affordable reserve');
+  assert.equal(sim.state.sp.player, 20);
 });
 
 test('rain scales player movement but not neutral movement; fog preserves range and uses a real sector', () => {
@@ -377,23 +424,45 @@ test('forts receive skill and burn damage, ignore controls; destruction precedes
 });
 
 test('neutral kills of summoned units reward opponent, neutral simultaneous kills reward first processed player only', () => {
-  const { sim, attacker, victim } = duel('hunter');
-  victim.side = 'neutral'; victim.attack = 100; victim.attackReadyAt = 0;
-  victim.target = attacker.id;
-  sim.state.sp.enemy = 10;
-  sim.update(FIXED_STEP);
-  near(sim.state.sp.enemy, 11 + FIXED_STEP);
-  const two = create();
-  const first = spawn(two, 'player', 'hunter', 6, 12);
-  const second = spawn(two, 'enemy', 'hunter', 6, 10.4);
-  const neutral = spawn(two, 'enemy', 'shield', 6, 11.2);
-  neutral.side = 'neutral'; neutral.hp = 6; neutral.reward = 1;
-  first.target = neutral.id; second.target = neutral.id;
-  first.attackReadyAt = 0; second.attackReadyAt = 0;
-  two.state.sp.player = 10; two.state.sp.enemy = 10;
-  two.update(FIXED_STEP);
-  near(two.state.sp.player, 11 + FIXED_STEP);
-  near(two.state.sp.enemy, 10 + FIXED_STEP);
+  for (const gameMode of ['standard', 'limited-sp'] as GameModeId[]) {
+    const sim = create('sunny', 'desert', [], gameMode);
+    const attacker = spawn(sim, 'player', 'hunter', 6, 12);
+    const victim = spawn(sim, 'enemy', 'shield', 6, 11.2);
+    victim.side = 'neutral'; victim.attack = 100; victim.attackReadyAt = 0;
+    victim.target = attacker.id;
+    sim.state.sp.enemy = 10;
+    sim.update(FIXED_STEP);
+    const passiveIncome = GAME_MODES[gameMode].spRegen * FIXED_STEP;
+    near(sim.state.sp.enemy, 11 + passiveIncome);
+    const two = create('sunny', 'desert', [], gameMode);
+    const first = spawn(two, 'player', 'hunter', 6, 12);
+    const second = spawn(two, 'enemy', 'hunter', 6, 10.4);
+    const neutral = spawn(two, 'enemy', 'shield', 6, 11.2);
+    neutral.side = 'neutral'; neutral.hp = 6; neutral.reward = 1;
+    first.target = neutral.id; second.target = neutral.id;
+    first.attackReadyAt = 0; second.attackReadyAt = 0;
+    two.state.sp.player = 10; two.state.sp.enemy = 10;
+    two.update(FIXED_STEP);
+    near(two.state.sp.player, 11 + passiveIncome);
+    near(two.state.sp.enemy, 10 + passiveIncome);
+  }
+});
+
+test('limited SP preserves summoned and neutral kill rewards and the 50 SP cap for both sides', () => {
+  for (const side of ['player', 'enemy'] as Side[]) for (const neutral of [false, true]) for (const sp of [10, 49, 50]) {
+    const sim = create('sunny', 'desert', [], 'limited-sp');
+    const other = side === 'player' ? 'enemy' : 'player';
+    const attacker = spawn(sim, side, 'hunter', 6, 12);
+    const victim = spawn(sim, other, 'shield', 6, 11.2);
+    if (neutral) victim.side = 'neutral';
+    victim.hp = 1;
+    attacker.target = victim.id; attacker.attackReadyAt = 0;
+    sim.state.sp[side] = sp; sim.state.sp[other] = 10;
+    sim.update(FIXED_STEP);
+    assert.equal(victim.hp, 0);
+    assert.equal(sim.state.sp[side], Math.min(SP_MAX, sp + UNITS.shield.reward));
+    assert.equal(sim.state.sp[other], 10);
+  }
 });
 
 test('map spawn counts form four groups in their destination halves with unchanged wave growth', () => {
@@ -515,5 +584,30 @@ test('all 12 environments finish fair AI vs AI matches with low and expensive su
     assert.ok(seen.has('commander'), 'AI can save for expensive units');
     assert.deepEqual(JSON.parse(JSON.stringify(sim.snapshot())), sim.snapshot());
     assert.ok(sim.state.units.every((unit) => Number.isFinite(unit.x + unit.y + unit.hp)));
+  }
+});
+
+test('limited SP completes player vs AI matches across all 12 environments and freezes the completed state', () => {
+  for (const map of ['desert', 'forest', 'swamp', 'road'] as MapId[]) for (const weather of ['sunny', 'rain', 'fog'] as WeatherId[]) {
+    const sim = create(weather, map, ['enemy'], 'limited-sp');
+    let playerSummons = 0;
+    let sawEnemy = false;
+    for (let second = 0; second < MATCH_DURATION && !sim.state.result; second++) {
+      const affordable = deck.filter((id) => UNITS[id].cost <= sim.state.sp.player);
+      const selected = affordable[second % affordable.length];
+      if (selected && sim.summon('player', selected, { x: 6, y: 14.5 })) playerSummons++;
+      sim.update(1);
+      sawEnemy ||= sim.state.units.some((unit) => unit.side === 'enemy');
+      for (const side of ['player', 'enemy'] as Side[]) assert.ok(sim.state.sp[side] >= 0 && sim.state.sp[side] <= SP_MAX);
+    }
+    assert.ok(playerSummons > 0 && sawEnemy, `${map}/${weather} starts both sides of the 1v1 match`);
+    assert.ok(sim.state.result, `${map}/${weather} completes`);
+    assert.ok(sim.state.time <= MATCH_DURATION);
+    assert.ok(sim.state.units.every((unit) => Number.isFinite(unit.x + unit.y + unit.hp)));
+    const snapshot = sim.snapshot();
+    assert.deepEqual(JSON.parse(JSON.stringify(snapshot)), snapshot);
+    sim.update(10);
+    assert.equal(sim.summon('player', 'hunter'), false);
+    assert.deepEqual(sim.snapshot(), snapshot);
   }
 });

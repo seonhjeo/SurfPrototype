@@ -2,6 +2,7 @@ export type UnitId =
   | 'warrior' | 'archer' | 'rogue' | 'shield' | 'mage'
   | 'knight' | 'warlock' | 'hunter' | 'commander' | 'archmage';
 export type Side = 'player' | 'enemy';
+export type GameModeId = 'standard' | 'limited-sp';
 export type MapId = 'desert' | 'forest' | 'swamp' | 'road';
 export type WeatherId = 'sunny' | 'rain' | 'fog';
 export type AttackKind = 'melee' | 'projectile' | 'slash' | 'fireball' | 'iceball';
@@ -64,10 +65,21 @@ export interface Environment {
   weather: WeatherId;
 }
 
+export interface GameModeDefinition {
+  id: GameModeId;
+  name: string;
+  initialSp: number;
+  spRegen: number;
+}
+
 // Distances use U; speeds use U/s; intervals and durations use seconds.
 export const SP_START = 5;
 export const SP_MAX = 50;
 export const SP_REGEN = 1;
+export const GAME_MODES: Record<GameModeId, GameModeDefinition> = {
+  standard: { id: 'standard', name: '기본 모드', initialSp: SP_START, spRegen: SP_REGEN },
+  'limited-sp': { id: 'limited-sp', name: '한정 SP 모드', initialSp: 20, spRegen: 0 },
+};
 export const MATCH_DURATION = 300;
 export const DECK_DURATION = 30;
 export const DECK_SIZE = 5;
