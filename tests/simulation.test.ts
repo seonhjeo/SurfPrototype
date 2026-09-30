@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Simulation, FIXED_STEP } from '../src/game/simulation.ts';
+import { Simulation, FIXED_STEP, ARENA_WIDTH, ARENA_HEIGHT } from '../src/game/simulation.ts';
 import type { UnitEntity } from '../src/game/simulation.ts';
-import { UNITS, MAPS, SP_MAX, FORT_HP } from '../src/game/data.ts';
+import { UNITS, MAPS, SP_MAX, FORT_HP, WAVE_FIRST, WAVE_INTERVAL, WAVE_GROWTH } from '../src/game/data.ts';
 import type { UnitId, Side, WeatherId, MapId } from '../src/game/data.ts';
 
 const deck: UnitId[] = ['warrior', 'archer', 'hunter', 'knight', 'commander'];
@@ -396,6 +396,78 @@ test('neutral kills of summoned units reward opponent, neutral simultaneous kill
   near(two.state.sp.enemy, 10 + FIXED_STEP);
 });
 
+test('map spawn counts form four groups in their destination halves with unchanged wave growth', () => {
+  const counts: Record<MapId, number> = { desert: 2, forest: 5, swamp: 3, road: 3 };
+  for (const map of ['desert', 'forest', 'swamp', 'road'] as MapId[]) {
+    const sim = create('sunny', map);
+    sim.update(WAVE_FIRST);
+    assert.equal(sim.state.wave, 1);
+    assert.equal(sim.state.units.length, counts[map] * 4, `${map} first wave count`);
+    for (const side of ['player', 'enemy'] as Side[]) {
+      const units = sim.state.units.filter((unit) => unit.targetSide === side);
+      assert.equal(units.length, counts[map] * 2);
+      assert.equal(units.filter((unit) => unit.x < ARENA_WIDTH / 2).length, counts[map]);
+      assert.equal(units.filter((unit) => unit.x > ARENA_WIDTH / 2).length, counts[map]);
+      for (const unit of units) {
+        assert.equal(unit.side, 'neutral');
+        assert.equal(unit.boss, false);
+        assert.ok(side === 'player' ? unit.y - unit.radius > ARENA_HEIGHT / 2 : unit.y + unit.radius < ARENA_HEIGHT / 2, `${map}/${side} spawns entirely in its own half`);
+      }
+    }
+    sim.state.units = [];
+    sim.update(WAVE_INTERVAL);
+    assert.equal(sim.state.wave, 2);
+    assert.equal(sim.state.units.length, counts[map] * 4, `${map} later wave count`);
+    for (const unit of sim.state.units) {
+      near(unit.maxHp, MAPS[map].monster.hp * WAVE_GROWTH);
+      near(unit.attack, MAPS[map].monster.attack * WAVE_GROWTH);
+    }
+  }
+  assert.equal(MAPS.road.name, '성 도로');
+});
+
+test('swamp increases ordinary neutral and boss movement by 30% through every weather and ice slow', () => {
+  for (const weather of ['sunny', 'rain', 'fog'] as WeatherId[]) {
+    const sim = create(weather, 'swamp');
+    sim.state.time = WAVE_FIRST + WAVE_INTERVAL * 4 - FIXED_STEP;
+    sim.state.wave = 4;
+    sim.update(FIXED_STEP);
+    const ordinary = sim.state.units.find((unit) => !unit.boss && unit.targetSide === 'player')!;
+    const boss = sim.state.units.find((unit) => unit.boss && unit.targetSide === 'player')!;
+    assert.equal(sim.state.units.filter((unit) => unit.boss).length, 2);
+    sim.state.units = [ordinary, boss];
+    ordinary.x = 2; ordinary.y = 12;
+    boss.x = 10; boss.y = 12;
+    near(ordinary.speed, MAPS.swamp.monster.speed);
+    near(boss.speed, MAPS.swamp.boss.speed);
+    for (const unit of sim.state.units) {
+      const before = { x: unit.x, y: unit.y };
+      sim.update(1);
+      near(Math.hypot(unit.x - before.x, unit.y - before.y), unit.speed * 1.3);
+    }
+    sim.state.zones.push({ id: 999, side: 'player', x: ordinary.x, y: ordinary.y, radius: 2, expiresAt: sim.state.time + 2, nextTickAt: sim.state.time + 10 });
+    const before = { x: ordinary.x, y: ordinary.y };
+    sim.update(0.5);
+    near(Math.hypot(ordinary.x - before.x, ordinary.y - before.y), ordinary.speed * 1.3 * 0.7 * 0.5);
+  }
+});
+
+test('map movement effects leave summoned units unchanged and road neutrals at their base speed', () => {
+  for (const map of ['desert', 'forest', 'swamp', 'road'] as MapId[]) {
+    const sim = create('rain', map);
+    const unit = spawn(sim, 'player', 'warrior', 6, 17);
+    unit.speed = UNITS.warrior.speed;
+    sim.update(1);
+    near(unit.y, 17 - UNITS.warrior.speed * 0.8);
+  }
+  const sim = create('rain', 'road');
+  sim.update(WAVE_FIRST);
+  const neutral = sim.state.units[0];
+  const before = { x: neutral.x, y: neutral.y };
+  sim.update(1);
+  near(Math.hypot(neutral.x - before.x, neutral.y - before.y), MAPS.road.monster.speed);
+});
+
 test('wave schedule/count/growth and boss warning positions match through wave 15', () => {
   const sim = create();
   for (const side of ['player', 'enemy'] as Side[]) sim.state.forts[side].hp = 1e9;
@@ -403,7 +475,7 @@ test('wave schedule/count/growth and boss warning positions match through wave 1
   assert.equal(sim.state.wave, 0);
   sim.update(FIXED_STEP);
   assert.equal(sim.state.wave, 1);
-  assert.equal(sim.state.units.length, 12);
+  assert.equal(sim.state.units.length, 8);
   const original = sim.state.units[0];
   assert.equal(original.maxHp, 6);
   sim.update(77);

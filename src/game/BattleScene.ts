@@ -7,6 +7,15 @@ const SCALE = 30;
 const OWN = 0x297b83;
 const FOE = 0xd36057;
 const GOLD = 0xefbd5a;
+const UNIT_DISPLAY = {
+  radius: 14,
+  iconSize: 16,
+  borderWidth: 2,
+  borderColor: GOLD,
+  healthBarWidth: 28,
+  healthBarHeight: 3,
+  healthBarGap: 5,
+};
 const PALETTES: Record<MapId, { grass: number; edge: number; path: number; detail: number }> = {
   forest: { grass: 0xb8cbb0, edge: 0x91ad89, path: 0xd4d2b5, detail: 0x72936d },
   desert: { grass: 0xe5c792, edge: 0xcda968, path: 0xf0d6a7, detail: 0xb78b50 },
@@ -133,19 +142,21 @@ export class BattleScene extends Phaser.Scene {
       if (hidden && u.side !== side) continue;
       const p = this.point(u.x, u.y);
       const neutral = u.side === 'neutral';
-      const radius = u.boss ? 14 : neutral ? 5.5 : 10.5;
+      const fullDisplay = !neutral || u.boss;
+      const radius = fullDisplay ? UNIT_DISPLAY.radius : 5.5;
       const color = neutral ? (u.boss ? 0x7954a0 : 0x9b753d) : u.side === side ? OWN : FOE;
       const alpha = hidden ? 0.42 : 1;
       g.fillStyle(0x1f3536, 0.17 * alpha).fillEllipse(p.x, p.y + radius * 0.7, radius * 2.1, radius * 0.85);
       g.fillStyle(color, alpha).fillCircle(p.x, p.y, radius);
-      g.lineStyle(u.boss ? 2 : 1.5, u.boss ? GOLD : 0xf4f0db, alpha).strokeCircle(p.x, p.y, radius);
-      if (!neutral || u.boss) this.label(`unit-${u.id}`, u.icon, p.x, p.y - 0.2, u.boss ? 16 : 14, '#fff8df', alpha);
+      g.lineStyle(fullDisplay ? UNIT_DISPLAY.borderWidth : 1.5, fullDisplay ? UNIT_DISPLAY.borderColor : 0xf4f0db, alpha).strokeCircle(p.x, p.y, radius);
+      if (fullDisplay) this.label(`unit-${u.id}`, u.icon, p.x, p.y - 0.2, UNIT_DISPLAY.iconSize, '#fff8df', alpha);
       if (u.buffUntil > state.time) g.lineStyle(1.5, GOLD, 0.8).strokeCircle(p.x, p.y, radius + 3);
       if (u.stunUntil > state.time) this.label(`stun-${u.id}`, '✦', p.x, p.y - radius - 8, 10, '#724da3');
-      if (u.hp < u.maxHp || u.boss) {
-        const width = u.boss ? 28 : neutral ? 11 : 20;
-        g.fillStyle(0x243334, 0.35).fillRect(p.x - width / 2, p.y - radius - 5, width, 3);
-        g.fillStyle(neutral ? GOLD : color).fillRect(p.x - width / 2, p.y - radius - 5, width * Math.max(0, u.hp / u.maxHp), 3);
+      if (u.hp < u.maxHp || fullDisplay) {
+        const width = fullDisplay ? UNIT_DISPLAY.healthBarWidth : 11;
+        const barY = p.y - radius - UNIT_DISPLAY.healthBarGap;
+        g.fillStyle(0x243334, 0.35).fillRect(p.x - width / 2, barY, width, UNIT_DISPLAY.healthBarHeight);
+        g.fillStyle(neutral ? GOLD : color).fillRect(p.x - width / 2, barY, width * Math.max(0, u.hp / u.maxHp), UNIT_DISPLAY.healthBarHeight);
       }
     }
     for (const shot of state.projectiles) {
@@ -180,9 +191,9 @@ export class BattleScene extends Phaser.Scene {
     if (this.preview) {
       const p = this.point(this.preview.x, this.preview.y);
       const color = this.preview.valid ? OWN : FOE;
-      g.fillStyle(color, 0.2).fillCircle(p.x, p.y, 18);
-      g.lineStyle(2, color, 0.9).strokeCircle(p.x, p.y, 18);
-      this.label('preview', this.preview.icon, p.x, p.y, 19, this.preview.valid ? '#297b83' : '#ba453f');
+      g.fillStyle(color, 0.2).fillCircle(p.x, p.y, UNIT_DISPLAY.radius);
+      g.lineStyle(UNIT_DISPLAY.borderWidth, color, 0.9).strokeCircle(p.x, p.y, UNIT_DISPLAY.radius);
+      this.label('preview', this.preview.icon, p.x, p.y - 0.2, UNIT_DISPLAY.iconSize, this.preview.valid ? '#297b83' : '#ba453f');
     }
     for (const [key, text] of this.labels) {
       if (!this.usedLabels.has(key)) {
