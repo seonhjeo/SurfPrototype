@@ -1,5 +1,6 @@
 import type { GameModeId, MapId, Side, UnitId, WeatherId } from './game/data.ts';
 import type { BattleState } from './game/simulation.ts';
+import { waitForMultiplayerServer } from './server-warmup.ts';
 
 export type RoomRequest =
   | { type: 'create'; gameMode: GameModeId }
@@ -58,9 +59,16 @@ export class RoomConnection {
     if (this.connected) return Promise.resolve();
     if (this.connecting) return this.connecting;
 
-    const connecting = new Promise<void>((resolve, reject) => {
+    const warmup = new AbortController();
+    const cancelWarmup = () => warmup.abort();
+    this.cancelConnect = cancelWarmup;
+    const connecting = (async () => {
+      const url = connectionUrl();
+      if (import.meta.env.VITE_MULTIPLAYER_URL) await waitForMultiplayerServer(url, warmup.signal);
+      if (warmup.signal.aborted) throw new Error('서버 연결을 취소했습니다.');
+      return new Promise<void>((resolve, reject) => {
       let socket: WebSocket;
-      try { socket = new WebSocket(connectionUrl()); }
+      try { socket = new WebSocket(url); }
       catch (error) { reject(error); return; }
       this.socket = socket;
       let opened = false;
@@ -107,11 +115,12 @@ export class RoomConnection {
           this.onMessage({ type: 'closed', message: '서버 연결이 끊어졌습니다. 경기 중 연결 종료는 패배로 처리됩니다.' });
         }
       };
-    });
+      });
+    })();
     this.connecting = connecting;
     void connecting.then(
-      () => { if (this.connecting === connecting) this.connecting = null; },
-      () => { if (this.connecting === connecting) this.connecting = null; },
+      () => { if (this.connecting === connecting) this.connecting = null; if (this.cancelConnect === cancelWarmup) this.cancelConnect = null; },
+      () => { if (this.connecting === connecting) this.connecting = null; if (this.cancelConnect === cancelWarmup) this.cancelConnect = null; },
     );
     return connecting;
   }

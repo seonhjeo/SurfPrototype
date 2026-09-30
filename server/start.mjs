@@ -4,6 +4,7 @@ import { stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { extname, resolve, sep } from 'node:path';
 import { createMultiplayerServer } from './multiplayer.mjs';
+import { handleHealthRequest } from './health.mjs';
 
 const root = fileURLToPath(new URL('../dist/', import.meta.url));
 const types = {
@@ -15,6 +16,7 @@ const types = {
 };
 const port = Number(process.env.PORT || 5173);
 const httpServer = createServer(async (request, response) => {
+  if (handleHealthRequest(request, response)) return;
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     response.writeHead(405, { Allow: 'GET, HEAD' }); response.end(); return;
   }
