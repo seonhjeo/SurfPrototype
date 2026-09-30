@@ -3,32 +3,31 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Surf 웹게임 프로토타입 테스트 공간" />
-    <meta name="theme-color" content="#102c35" />
+    <meta name="description" content="다섯 유닛으로 펼치는 작은 전략 대전. AI 또는 친구와 성채 공방전을 플레이하세요." />
+    <meta name="theme-color" content="#14232f" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <title>Surf · Prototype</title>
+    <title>Surf · 성채 공방전</title>
   </head>
   <body>
-    <main>
-      <header>
-        <div>
-          <p class="eyebrow">PLAYGROUND / 001</p>
-          <h1>Surf<span>Prototype</span></h1>
-        </div>
-        <p class="status" id="status" role="status">엔진 초기화 중</p>
-      </header>
-      <section aria-labelledby="play-title">
-        <div class="section-heading">
-          <h2 id="play-title">작은 실험의 시작</h2>
-          <p>Phaser 렌더링과 입력을 확인하는 테스트 화면입니다.</p>
-        </div>
-        <div id="game" tabindex="0" role="group" aria-label="게임 테스트 화면" aria-describedby="controls"></div>
-        <div class="toolbar">
-          <p id="controls">화면을 클릭하거나 터치해 이동하세요. 화면 선택 후 방향키 / WASD로도 움직일 수 있습니다.</p>
-          <button id="reset" type="button">위치 초기화 ↗</button>
-        </div>
-      </section>
-      <footer><span>SURF LAB</span><span>아이디어를 플레이로.</span></footer>
+    <main class="workspace">
+      <aside class="desktop-side brand-side" aria-label="Surf 소개">
+        <span class="brand-mark">s.</span><p class="eyebrow">SURF / PLAYGROUND</p>
+        <h2>아이디어를<br>플레이로.</h2><p>작게 시작해서,<br>재미를 발견하는 곳.</p>
+        <span class="side-rule"></span><span class="edition">EXPERIMENT NO. 001<br>FORTRESS DUEL</span>
+      </aside>
+      <div class="app-shell" id="app">
+        <header class="shell-topbar"><div class="wordmark">surf<span>®</span></div><span class="prototype-chip"><i></i> PROTOTYPE 001</span></header>
+        <div id="screen" class="screen"></div>
+        <div class="toast" id="toast" aria-hidden="true"></div>
+        <div class="sr-only" id="status" role="status" aria-live="polite" aria-atomic="true"></div>
+      </div>
+      <aside class="desktop-side guide-side" aria-label="플레이 방법">
+        <p class="eyebrow">HOW TO PLAY</p><ol class="play-guide">
+          <li><span>01</span><div><strong>다섯 유닛을 선택</strong><p>맵과 날씨를 보고<br>나만의 덱을 만드세요.</p></div></li>
+          <li><span>02</span><div><strong>전장으로 소환</strong><p>카드를 누르거나 드래그.<br>유닛은 스스로 싸웁니다.</p></div></li>
+          <li><span>03</span><div><strong>성채를 지켜내세요</strong><p>중립 몬스터를 처치하고<br>상대의 성채를 공략하세요.</p></div></li>
+        </ol><p class="guide-footnote">ONE DECK. ONE FORT.<br>YOUR STRATEGY.</p>
+      </aside>
     </main>
     <noscript>이 프로토타입을 실행하려면 JavaScript를 활성화해 주세요.</noscript>
     <script type="module" src="/src/main.ts"></script>
