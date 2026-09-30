@@ -1,7 +1,7 @@
 import { randomInt } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { WebSocket, WebSocketServer } from 'ws';
-import { DECK_DURATION, DECK_SIZE, UNIT_IDS, completeDeck, randomEnvironment } from '../src/game/data.ts';
+import { DECK_DURATION, DECK_SIZE, GAME_MODES, UNIT_IDS, completeDeck, randomEnvironment } from '../src/game/data.ts';
 import { Simulation } from '../src/game/simulation.ts';
 
 const SIDES = ['player', 'enemy'];
@@ -34,7 +34,7 @@ export function createMultiplayerServer(httpServer, options = {}) {
     const other = room.members[opposite(side)];
     return {
       type: 'room', code: room.code, side, phase: room.phase,
-      map: room.map, weather: room.weather, deck: [...own.deck],
+      map: room.map, weather: room.weather, gameMode: room.gameMode, deck: [...own.deck],
       ready: own.ready, opponentReady: other?.ready ?? false,
       opponentConnected: other?.socket?.readyState === WebSocket.OPEN,
       remaining: room.phase === 'waiting' && room.deadline !== null
@@ -65,7 +65,7 @@ export function createMultiplayerServer(httpServer, options = {}) {
     if (room.phase !== 'waiting' || !room.members.enemy?.socket) return;
     for (const side of SIDES) room.members[side].deck = completeDeck(room.members[side].deck);
     room.simulation = createSimulation({
-      map: room.map, weather: room.weather,
+      map: room.map, weather: room.weather, gameMode: room.gameMode,
       decks: { player: room.members.player.deck, enemy: room.members.enemy.deck },
       seed: randomInt(0, 2 ** 31),
     });
@@ -109,11 +109,15 @@ export function createMultiplayerServer(httpServer, options = {}) {
     if (request.type === 'create' || request.type === 'join') {
       if (session.room) { error(socket, '현재 방에서 나온 뒤 새 방을 이용해 주세요.'); return; }
       if (request.type === 'create') {
+        const gameMode = request.gameMode === undefined ? 'standard' : request.gameMode;
+        if (typeof gameMode !== 'string' || !Object.hasOwn(GAME_MODES, gameMode)) {
+          error(socket, '지원하지 않는 게임 모드입니다.'); return;
+        }
         if (rooms.size >= maxRooms) { error(socket, '현재 방이 많아 새 방을 만들 수 없습니다. 잠시 후 다시 시도해 주세요.'); return; }
         let code;
         do { code = String(randomInt(100000, 1000000)); } while (rooms.has(code));
         const room = {
-          code, ...randomEnvironment(), phase: 'waiting', deadline: null,
+          code, gameMode, ...randomEnvironment(), phase: 'waiting', deadline: null,
           members: { player: member(socket), enemy: null }, simulation: null,
         };
         rooms.set(code, room);
