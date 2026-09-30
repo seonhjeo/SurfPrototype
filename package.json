@@ -7,13 +7,18 @@
     "node": "24.x"
   },
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
+    "dev": "node server/dev.mjs",
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && vite build",
-    "preview": "vite preview --host 127.0.0.1"
+    "preview": "vite preview --host 127.0.0.1",
+    "start": "node server/start.mjs",
+    "test:multiplayer": "node --test server/multiplayer.test.mjs",
+    "test:simulation": "node --test tests/simulation.test.ts",
+    "test": "node --test tests/simulation.test.ts server/multiplayer.test.mjs"
   },
   "dependencies": {
-    "phaser": "4.2.1"
+    "phaser": "4.2.1",
+    "ws": "8.22.0"
   },
   "devDependencies": {
     "typescript": "7.0.2",
