@@ -405,7 +405,7 @@ export class Simulation {
     if (entity.hp <= 0 && target.unit) {
       const victim = target.unit;
       const rewardSide = victim.side !== 'neutral' ? opposite(victim.side) : source !== 'neutral' ? source : null;
-      if (rewardSide) this.state.sp[rewardSide] = Math.min(SP_MAX, this.state.sp[rewardSide] + victim.reward);
+      if (rewardSide && GAME_MODES[this.state.gameMode].killSpRewards) this.state.sp[rewardSide] = Math.min(SP_MAX, this.state.sp[rewardSide] + victim.reward);
       this.effect(target, 'death', 0.4, target.side);
     }
   }

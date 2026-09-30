@@ -66,6 +66,7 @@ h1, h2, p { margin: 0; }
 .mode-option.selected { border-color: var(--lime); background: #2a3d3b; }
 .mode-option.selected strong { color: var(--lime); }
 .mode-option:hover:not(:disabled) { background: #304542; }
+.mode-option:first-child { grid-column: 1 / -1; }
 .ai-button { min-height: 53px; font-size: 14px; }
 .ai-button > span:last-child { font-size: 22px; font-weight: 400; }
 .private-heading { display: flex; align-items: center; gap: 12px; margin: 23px 0 12px; color: #8da1ab; font-size: 10px; }
