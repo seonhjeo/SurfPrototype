@@ -50,20 +50,62 @@ HTTPS 앞단에서는 WebSocket 업그레이드를 `/ws`로 전달하도록 구�
 
 ## Render WebSocket 서버 배포
 
-Vercel은 화면을 배포하고 Render의 단일 Node.js 24 프로세스가 기존 WebSocket 연결과 방·전투를 관리합니다. 서버가 입장·덱·준비·SP·소환·결과를 검증하며 각 참가자에게 자신의 덱만 전달합니다. 실제 Render 서비스 연결과 공개 사이트 대전 검증은 아직 완료하지 않았습니다.
+Vercel은 화면을 배포하고 Render의 단일 Node.js 24 프로세스가 기존 WebSocket 연결과 방·전투를 관리합니다. 서버가 입장·덱·준비·SP·소환·결과를 검증하며 각 참가자에게 자신의 덱만 전달합니다. 공개 화면은 [surf-prototype.vercel.app](https://surf-prototype.vercel.app/), 게임 서버는 `wss://surf-multiplayer.onrender.com/ws`입니다.
 
-1. Render Web Service에 이 저장소의 검증할 작업 브랜치를 연결합니다. Node.js 24.19.0·Free 단일 인스턴스·Singapore 지역을 사용하며 저장소의 `render.yaml`을 기준으로 설정합니다.
-2. Build Command는 `npm ci && npm run build`, Start Command는 `npm start`, Health Check Path는 `/healthz`를 사용합니다. `server/start.mjs`는 Render가 제공한 `PORT`로 `0.0.0.0`에서 접속을 받습니다. [Render Web Service 설정](https://render.com/docs/web-services)을 참고하세요.
-3. Render의 `MULTIPLAYER_ALLOWED_ORIGINS`에 실제 Vercel 화면 출처를 설정합니다. Production과 테스트할 Preview 출처를 각각 정확히 지정합니다.
-4. 서버 배포 후 `https://실제-Render-호스트/healthz`가 HTTP 200과 `{"status":"ok","service":"surf-multiplayer"}`를 반환하는지 확인합니다. 이 경로는 방 상태나 인증 정보를 노출하지 않습니다.
-5. Vercel 빌드 환경의 `VITE_MULTIPLAYER_URL`을 `wss://실제-Render-호스트/ws`로 설정하고 화면을 다시 배포합니다. 환경변수만 바꾸면 기존 화면 번들에는 반영되지 않습니다.
+1. 현재 Render 서비스는 대시보드에서 수동 구성했으며 `main`의 `5df7f3a`를 배포했습니다. Node.js 24.19.0·Free 단일 인스턴스·Singapore 지역을 사용합니다. 저장소의 `render.yaml`은 이전 작업 브랜치 `0.3.1-private-connection-fix`를 가리키므로 현재 서비스의 배포 브랜치와 다릅니다.
+2. Build Command는 `npm ci && npm run build`, 실제 Start Command는 `npm run start`(`npm start`와 같은 스크립트), Health Check Path는 `/healthz`입니다. `server/start.mjs`는 Render가 제공한 `PORT`로 `0.0.0.0`에서 접속을 받습니다. [Render Web Service 설정](https://render.com/docs/web-services)을 참고하세요.
+3. 현재 Render의 `MULTIPLAYER_ALLOWED_ORIGINS`는 `https://surf-prototype.vercel.app`만 허용합니다. Preview에서 같은 서버를 테스트하려면 해당 출처를 정확히 추가해야 합니다.
+4. [서버 상태 확인](https://surf-multiplayer.onrender.com/healthz)은 HTTP 200과 `{"status":"ok","service":"surf-multiplayer"}`를 반환합니다. 이 경로는 방 상태나 인증 정보를 노출하지 않습니다.
+5. Vercel Production의 `VITE_MULTIPLAYER_URL`은 `wss://surf-multiplayer.onrender.com/ws`이며 설정 후 화면을 재배포했습니다. 환경변수만 바꾸면 기존 화면 번들에는 반영되지 않습니다.
 6. 공개 화면의 독립된 두 클라이언트에서 방 생성·6자리 코드 참가·준비·소환·결과·재대전을 확인하고 [공개 PVP 배포 개발문서](Docs/개발문서/공개PVP배포.md)에 실제 배포 URL과 검증 범위를 기록합니다.
 
 방은 한 프로세스의 메모리에서 공유하므로 서버를 단일 인스턴스로 운영합니다. 재시작·재배포·절전으로 프로세스가 종료되면 방이 사라집니다. 경기 중 연결 종료는 기존 규칙대로 패배이며 재접속은 제공하지 않습니다.
 
 Render Free는 HTTP 요청이나 기존 WebSocket의 수신 메시지가 15분 동안 없으면 절전하고, 다음 요청이나 새 연결에서 기동하는 데 약 1분이 걸릴 수 있습니다. [Render Free의 절전 제한](https://render.com/docs/free#spinning-down-on-idle)을 참고하세요. 클라이언트는 최초 연결 전 `/healthz`를 확인하며 최대 120초 동안 기동을 기다립니다. 개별 요청 제한은 10초, 재시도 간격은 2초이며 경기 재접속은 추가하지 않습니다.
 
-PVP 화면은 서버 상태 사이의 좌표를 150ms 동안 보간합니다. 전투 판정·SP·소환·승패는 서버 상태를 따르고 AI 대전의 계산은 유지합니다. 2026-09-30 Node.js 24의 자동 테스트 59개와 타입 검사·프로덕션 빌드가 통과했습니다. 로컬 브라우저 두 클라이언트에서 생성·참가·준비·전투·소환·상대 나가기 후 승리 화면을 확인했으며 실제 Render·Vercel 공개 대전은 별도 검증으로 남아 있습니다.
+PVP 화면은 서버 상태 사이의 좌표를 150ms 동안 보간합니다. 전투 판정·SP·소환·승패는 서버 상태를 따르고 AI 대전의 계산은 유지합니다. 2026-09-30 Node.js 24의 자동 테스트 59개와 타입 검사·프로덕션 빌드가 통과했습니다. Render와 Vercel은 `main`의 `5df7f3a` 배포가 각각 Live·Ready 상태이며, 세 모드의 공개 WebSocket 방 생성·참가·덱 비공개·전투·소환·이탈을 검증했습니다. 실제 공개 브라우저 두 탭에서도 전투·결과·재대전·상대 나가기 후 승리 화면을 확인했습니다. 서로 다른 기기·네트워크에서는 아직 검증하지 않았습니다. 배포 ID와 상세 흐름은 [공개 PVP 검증 기록](Docs/개발문서/공개PVP배포.md)에 남겼습니다.
+
+## 모드 설정으로 기능 조합하기
+
+기존 세 모드는 `src/game/data.ts`의 `GAME_MODES`에서 하나의 `rules` 설정을 사용합니다. 기본값은 기존 플레이와 동일합니다. 라인은 0개이며 성채 미니언·성채 공격·포탑·SP 상자는 모두 꺼져 있습니다. 설정 구조와 초기 수치는 `src/game/mode-settings.ts`, 이동 경로는 `src/game/lanes.ts`에서 관리합니다.
+
+| 설정 | 역할 |
+| --- | --- |
+| `lanes.count` | 0: 자유 이동, 1~3: 라인 이동·같은 라인 전투 |
+| `neutralWaves.enabled` | 중립 몬스터·보스 소환 여부, 미니언 소환과 독립 |
+| `minions.enabled` | 라인당 일반 3마리와 매 5회 엘리트 추가 |
+| `fortAttacks.catapult.enabled`, `fortAttacks.oil.enabled` | 성채의 공격 수단을 각각 켜거나 끔 |
+| `towers.enabled` | 양 진영 라인별 전방 포탑 |
+| `spBox.enabled`, `spBox.respawnDelay` | 중앙 SP 상자, `null`이면 파괴 후 사라짐, 숫자이면 해당 초 후 재생성 |
+| `sp.initial`, `sp.maximum` | 시작 SP·보유 상한 |
+| `sp.passive` | 시간당 획득 여부·초당 획득량 |
+| `sp.summoned`, `sp.minion`, `sp.elite`, `sp.neutral` | 종류별 처치 획득 여부·고정량·배율 |
+
+보상 설정의 `amount: null`은 각 개체의 기존 보상량을 사용합니다. 숫자는 고정 보상으로 대체하며, `multiplier`를 곱합니다. `enabled: false`이면 지급하지 않습니다. `neutral`은 일반 중립과 중립 보스 모두에 적용합니다. SP 상자는 실제로 줄어든 체력에 `spPerDamage`를 곱해 지급하므로 과잉 피해로 보상이 늘어나지 않습니다.
+
+개발 중 한 경기에서 모든 기능을 확인하는 예:
+
+```ts
+const simulation = new Simulation({
+  map: 'road', weather: 'sunny',
+  decks: { player: ['warrior', 'archer', 'hunter'], enemy: ['warrior', 'archer', 'hunter'] },
+  aiSides: ['enemy'],
+  rules: {
+    lanes: { count: 3 },
+    minions: { enabled: true },
+    fortAttacks: { catapult: { enabled: true }, oil: { enabled: true } },
+    towers: { enabled: true },
+    spBox: { enabled: true, respawnDelay: 30 },
+    sp: { minion: { enabled: true, amount: 2 } },
+  },
+});
+```
+
+실제 모드에 적용하려면 `GAME_MODES`의 해당 모드 `rules`를 같은 방식으로 조합합니다. 설정은 AI와 PVP의 공통 전투 계산에 적용되며, 로비의 별도 커스텀 설정 화면은 추가하지 않습니다. PVP 서버는 모드 ID로 확정한 규칙을 방 생성 시 보관하고 참가자에게 전송하며 재대전에도 유지합니다. 참가자가 보낸 임의 규칙은 적용하지 않습니다. 프런트와 게임 서버 모두 같은 코드를 배포해야 합니다.
+
+로컬에서 새 기능을 직접 확인하려면 `npm run dev` 실행 후 `/tests/manual/mode-preview.html?lanes=3`에 접속합니다. `lanes=0`, `1`, `2`, `3`을 바꿔 확인할 수 있습니다. 이 AI 전용 검증 페이지는 시작 SP 40·상한 80, 모든 새 기능 ON·상자 15초 재생성을 사용하며 실제 세 모드의 기본값이나 Production 빌드를 변경하지 않습니다.
+
+세부 규칙과 위임된 초기 수치는 [게임 모드 기획](Docs/기획서/게임모드.md) 및 연결된 라인·미니언·구조물 문서에서 확인할 수 있습니다.
 
 ## 구성
 
@@ -103,18 +145,19 @@ Vercel 설정은 다음 값을 사용합니다.
 | Build Command | `npm run build` |
 | Output Directory | `dist` |
 | Production Branch | `main` |
-| 빌드 환경변수 | `VITE_MULTIPLAYER_URL=wss://실제-Render-호스트/ws` |
+| Production 빌드 환경변수 | `VITE_MULTIPLAYER_URL=wss://surf-multiplayer.onrender.com/ws` |
 
 Vercel에서 이 저장소를 Import하고 Git 연동을 유지하면 다음 흐름으로 테스트합니다.
 
-Vercel에는 정적 프런트엔드를 배포하고 비공개 PVP 연결은 Render 서버의 `/ws`로 전달합니다. 실제 Render 서버 연결과 공개 사이트 대전 검증은 아직 수행하지 않았습니다.
+Vercel에는 정적 프런트엔드를 배포하고 비공개 PVP 연결은 Render 서버의 `/ws`로 전달합니다. 2026-09-30 Production 재배포와 공개 브라우저 두 탭의 대전·재대전을 검증했습니다. 현재 Render 서버는 Production 출처만 허용합니다.
 
 1. 최신 `dev`에서 새 개발 브랜치를 만들고 구현·검증합니다.
 2. 구현 후 로컬 서버를 실행하고 브라우저를 팝업해 사용자가 직접 테스트하도록 합니다.
 3. 사용자가 테스트를 완료하고 `dev` 병합을 요청한 때에만 병합합니다. 사용한 개발 브랜치는 유지합니다.
-4. `main`에 대한 직접 push와 직접 merge는 금지합니다. `main` 대상 PR은 사용자가 요청한 경우에만 만들며, PR 생성 요청은 병합 권한을 포함하지 않습니다.
+4. 승인된 개발사항을 `dev`에 병합·push하면 깃 에이전트가 별도 요청 없이 `dev` → `main` PR을 생성합니다. 같은 열린 PR이 있으면 최신 개발사항으로 갱신합니다.
+5. `main`에 대한 직접 push와 직접 merge는 금지합니다. 자동 PR 생성·갱신은 PR 병합 권한을 포함하지 않으며, PR 병합은 사용자가 명시적으로 요청했을 때 수행합니다.
 
-지침·문서만 수정하는 작업은 최신 `dev`에서 직접 작업·커밋하고 `dev`에 push합니다. 문서 변경에도 `main` 직접 push·merge 금지는 동일하게 적용됩니다.
+지침·문서만 수정하는 작업은 최신 `dev`에서 직접 작업·커밋하고 `dev`에 push하며 자동 PR은 생성하지 않습니다. 문서만의 PR은 사용자가 별도로 요청했을 때 생성합니다. 문서 변경에도 `main` 직접 push·merge 금지는 동일하게 적용됩니다.
 `main` push는 Production, 다른 브랜치 push는 Preview 배포를 유발합니다. Preview는 사용자 로컬 테스트를 대신하지 않습니다.
 상세 절차는 [Git·테스트 지침](AgentDocs/GitAndTesting.md)을 따릅니다.
 

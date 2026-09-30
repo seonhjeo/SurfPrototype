@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import type { MapId, Side } from './data.ts';
 import type { BattleState } from './simulation.ts';
 import type { BattlePresentation } from './battle-presentation.ts';
+import { getLaneRoutes } from './lanes.ts';
 
 export const GAME_SIZE = { width: 360, height: 600 };
 const SCALE = 30;
@@ -30,7 +31,7 @@ export class BattleScene extends Phaser.Scene {
   private ink!: Phaser.GameObjects.Graphics;
   private labels = new Map<string, Phaser.GameObjects.Text>();
   private usedLabels = new Set<string>();
-  private paintedMap: MapId | null = null;
+  private paintedMap: string | null = null;
   private preview: { x: number; y: number; valid: boolean; icon: string } | null = null;
 
   constructor(private readState: () => BattleState | null, private readSide: () => Side, private readPresentation?: () => BattlePresentation | null) {
@@ -72,15 +73,27 @@ export class BattleScene extends Phaser.Scene {
     this.usedLabels.add(key);
   }
 
-  private drawTerrain(map: MapId) {
+  private drawTerrain(map: MapId, laneCount: number) {
     const p = PALETTES[map];
     const g = this.terrain.clear();
     g.fillStyle(p.edge).fillRect(0, 0, 360, 600);
     g.fillStyle(p.grass).fillRoundedRect(13, 0, 334, 600, 30);
-    // Soft pathways are scenery, never cells or movement constraints.
-    g.lineStyle(64, p.path, 0.65).lineBetween(180, 25, 180, 575);
-    g.lineStyle(25, p.path, 0.5).lineBetween(10, 300, 350, 300);
-    g.fillStyle(p.path, 0.4).fillEllipse(180, 300, 210, 90);
+    if (laneCount) {
+      for (const route of getLaneRoutes(laneCount)) {
+        const points = route.points.map((point) => this.point(point.x, point.y));
+        g.lineStyle(24, p.path, 0.85).beginPath().moveTo(points[0].x, points[0].y);
+        for (const point of points.slice(1)) g.lineTo(point.x, point.y);
+        g.strokePath();
+        g.lineStyle(1, 0xffffff, 0.45).beginPath().moveTo(points[0].x, points[0].y);
+        for (const point of points.slice(1)) g.lineTo(point.x, point.y);
+        g.strokePath();
+      }
+    } else {
+      // In the original modes these paths remain decorative.
+      g.lineStyle(64, p.path, 0.65).lineBetween(180, 25, 180, 575);
+      g.lineStyle(25, p.path, 0.5).lineBetween(10, 300, 350, 300);
+      g.fillStyle(p.path, 0.4).fillEllipse(180, 300, 210, 90);
+    }
     g.lineStyle(1, 0xffffff, 0.28).strokeCircle(180, 300, 34);
     for (let i = 0; i < 55; i++) {
       const x = 20 + ((i * 73 + 17) % 320);
@@ -98,7 +111,7 @@ export class BattleScene extends Phaser.Scene {
       g.fillStyle(0x465b52, 0.75).fillCircle(x, 300, 10);
       g.fillStyle(GOLD).fillCircle(x, 300, 4);
     });
-    this.paintedMap = map;
+    this.paintedMap = `${map}:${laneCount}:${this.readSide()}`;
   }
 
   update(_time: number) {
@@ -106,10 +119,17 @@ export class BattleScene extends Phaser.Scene {
     const state = presentation?.state ?? this.readState();
     if (!state || !this.ink) return;
     const visualTime = presentation?.visualTime ?? state.time;
-    if (state.map !== this.paintedMap) this.drawTerrain(state.map);
+    const laneCount = state.rules?.lanes.count ?? 0;
+    if (`${state.map}:${laneCount}:${this.readSide()}` !== this.paintedMap) this.drawTerrain(state.map, laneCount);
     const g = this.ink.clear();
     this.usedLabels.clear();
     const side = this.readSide();
+    if (laneCount) {
+      for (const route of getLaneRoutes(laneCount)) {
+        const p = this.point(route.points[2].x, 12.8);
+        this.label(`lane-${route.id}`, `${route.id + 1}`, p.x + 19, p.y, 10, '#50614d', 0.7);
+      }
+    }
     if (this.preview) {
       g.fillStyle(OWN, 0.1).fillRect(13, 300, 334, 300);
       g.lineStyle(2, OWN, 0.7).lineBetween(13, 300, 347, 300);
@@ -137,6 +157,28 @@ export class BattleScene extends Phaser.Scene {
       g.fillStyle(color).fillRoundedRect(p.x - 35, barY, 70 * Math.max(0, fort.hp / fort.maxHp), 5, 2);
       this.label(`fort-${fortSide}`, `${Math.max(0, Math.ceil(fort.hp))}`, p.x + 52, barY + 2, 10);
     }
+    for (const structure of state.structures ?? []) {
+      if (structure.hp <= 0) continue;
+      const p = this.point(structure.x, structure.y);
+      const box = structure.kind === 'sp-box';
+      const color = box ? 0xa87531 : structure.side === side ? OWN : FOE;
+      const radius = Math.max(11, structure.radius * SCALE);
+      g.fillStyle(0x263b38, 0.15).fillEllipse(p.x, p.y + radius, radius * 2.5, radius);
+      if (box) {
+        g.fillStyle(0xeac786).fillRoundedRect(p.x - radius, p.y - radius, radius * 2, radius * 2, 3);
+        g.lineStyle(2, color).strokeRoundedRect(p.x - radius, p.y - radius, radius * 2, radius * 2, 3);
+        g.lineStyle(3, color).lineBetween(p.x - radius, p.y, p.x + radius, p.y);
+        this.label(`structure-${structure.id}`, '◆', p.x, p.y, 13, '#fff7d5');
+      } else {
+        g.fillStyle(0xdedcca).fillRoundedRect(p.x - radius, p.y - radius, radius * 2, radius * 2, 3);
+        g.lineStyle(2, color).strokeRoundedRect(p.x - radius, p.y - radius, radius * 2, radius * 2, 3);
+        g.fillStyle(color).fillRect(p.x - 3, p.y - radius - 6, 6, 13);
+        this.label(`structure-${structure.id}`, '♜', p.x, p.y + 2, 16, structure.side === side ? '#297b83' : '#d36057');
+      }
+      const barY = p.y - radius - 8;
+      g.fillStyle(0x243334, 0.35).fillRect(p.x - 17, barY, 34, 4);
+      g.fillStyle(box ? GOLD : color).fillRect(p.x - 17, barY, 34 * Math.max(0, structure.hp / structure.maxHp), 4);
+    }
     const ordered = [...state.units].sort((a, b) => this.point(a.x, a.y).y - this.point(b.x, b.y).y);
     for (const u of ordered) {
       if (u.hp <= 0) continue;
@@ -145,18 +187,21 @@ export class BattleScene extends Phaser.Scene {
       if (hidden && u.side !== side) continue;
       const p = this.point(u.x, u.y);
       const neutral = u.side === 'neutral';
-      const fullDisplay = !neutral || u.boss;
-      const radius = fullDisplay ? UNIT_DISPLAY.radius : 5.5;
+      const minion = u.kind === 'minion';
+      const fullDisplay = (!neutral && !minion) || u.boss || u.elite;
+      const radius = fullDisplay ? UNIT_DISPLAY.radius : minion ? 8 : 5.5;
       const color = neutral ? (u.boss ? 0x7954a0 : 0x9b753d) : u.side === side ? OWN : FOE;
       const alpha = hidden ? 0.42 : 1;
       g.fillStyle(0x1f3536, 0.17 * alpha).fillEllipse(p.x, p.y + radius * 0.7, radius * 2.1, radius * 0.85);
       g.fillStyle(color, alpha).fillCircle(p.x, p.y, radius);
       g.lineStyle(fullDisplay ? UNIT_DISPLAY.borderWidth : 1.5, fullDisplay ? UNIT_DISPLAY.borderColor : 0xf4f0db, alpha).strokeCircle(p.x, p.y, radius);
       if (fullDisplay) this.label(`unit-${u.id}`, u.icon, p.x, p.y - 0.2, UNIT_DISPLAY.iconSize, '#fff8df', alpha);
+      else if (minion) this.label(`unit-${u.id}`, u.icon, p.x, p.y, 10, '#fff8df', alpha);
+      if (minion && u.elite) g.lineStyle(1, GOLD, alpha).strokeCircle(p.x, p.y, radius + 3);
       if (u.buffUntil > state.time) g.lineStyle(1.5, GOLD, 0.8).strokeCircle(p.x, p.y, radius + 3);
       if (u.stunUntil > state.time) this.label(`stun-${u.id}`, '✦', p.x, p.y - radius - 8, 10, '#724da3');
-      if (u.hp < u.maxHp || fullDisplay) {
-        const width = fullDisplay ? UNIT_DISPLAY.healthBarWidth : 11;
+      if (u.hp < u.maxHp || fullDisplay || minion) {
+        const width = fullDisplay ? UNIT_DISPLAY.healthBarWidth : minion ? 18 : 11;
         const barY = p.y - radius - UNIT_DISPLAY.healthBarGap;
         g.fillStyle(0x243334, 0.35).fillRect(p.x - width / 2, barY, width, UNIT_DISPLAY.healthBarHeight);
         g.fillStyle(neutral ? GOLD : color).fillRect(p.x - width / 2, barY, width * Math.max(0, u.hp / u.maxHp), UNIT_DISPLAY.healthBarHeight);
@@ -164,13 +209,19 @@ export class BattleScene extends Phaser.Scene {
     }
     for (const shot of state.projectiles) {
       const p = this.point(shot.x, shot.y);
-      g.fillStyle(shot.side === side ? 0xf7d779 : 0xffa88d).fillCircle(p.x, p.y, 3);
-      g.lineStyle(1, 0xffffff, 0.8).strokeCircle(p.x, p.y, 3);
+      const stone = shot.sourceId === 0;
+      const radius = stone ? 5 : 3;
+      g.fillStyle(stone ? 0x786950 : shot.side === side ? 0xf7d779 : 0xffa88d).fillCircle(p.x, p.y, radius);
+      g.lineStyle(1, 0xffffff, 0.8).strokeCircle(p.x, p.y, radius);
     }
     for (const effect of state.effects) {
       const p = this.point(effect.x, effect.y);
       const life = Math.min(1, Math.max(0, (effect.expiresAt - visualTime) / 0.4));
-      g.lineStyle(2, effect.kind === 'skill' ? GOLD : 0xffffff, life).strokeCircle(p.x, p.y, 7 + (1 - life) * 13);
+      if (effect.kind === 'oil') {
+        const radius = (effect.radius ?? 2.4) * SCALE;
+        g.fillStyle(0xd48a33, life * 0.18).fillCircle(p.x, p.y, radius);
+        g.lineStyle(2, 0xffbf61, life * 0.6).strokeCircle(p.x, p.y, radius * (1 - life * 0.15));
+      } else g.lineStyle(2, ['skill', 'catapult', 'tower'].includes(effect.kind) ? GOLD : 0xffffff, life).strokeCircle(p.x, p.y, 7 + (1 - life) * 13);
     }
     for (let i = 0; i < state.warnings.length; i++) {
       const warning = state.warnings[i];
