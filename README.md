@@ -50,20 +50,20 @@ HTTPS 앞단에서는 WebSocket 업그레이드를 `/ws`로 전달하도록 구�
 
 ## Render WebSocket 서버 배포
 
-Vercel은 화면을 배포하고 Render의 단일 Node.js 24 프로세스가 기존 WebSocket 연결과 방·전투를 관리합니다. 서버가 입장·덱·준비·SP·소환·결과를 검증하며 각 참가자에게 자신의 덱만 전달합니다. 실제 Render 서비스 연결과 공개 사이트 대전 검증은 아직 완료하지 않았습니다.
+Vercel은 화면을 배포하고 Render의 단일 Node.js 24 프로세스가 기존 WebSocket 연결과 방·전투를 관리합니다. 서버가 입장·덱·준비·SP·소환·결과를 검증하며 각 참가자에게 자신의 덱만 전달합니다. 공개 화면은 [surf-prototype.vercel.app](https://surf-prototype.vercel.app/), 게임 서버는 `wss://surf-multiplayer.onrender.com/ws`입니다.
 
-1. Render Web Service에 이 저장소의 검증할 작업 브랜치를 연결합니다. Node.js 24.19.0·Free 단일 인스턴스·Singapore 지역을 사용하며 저장소의 `render.yaml`을 기준으로 설정합니다.
-2. Build Command는 `npm ci && npm run build`, Start Command는 `npm start`, Health Check Path는 `/healthz`를 사용합니다. `server/start.mjs`는 Render가 제공한 `PORT`로 `0.0.0.0`에서 접속을 받습니다. [Render Web Service 설정](https://render.com/docs/web-services)을 참고하세요.
-3. Render의 `MULTIPLAYER_ALLOWED_ORIGINS`에 실제 Vercel 화면 출처를 설정합니다. Production과 테스트할 Preview 출처를 각각 정확히 지정합니다.
-4. 서버 배포 후 `https://실제-Render-호스트/healthz`가 HTTP 200과 `{"status":"ok","service":"surf-multiplayer"}`를 반환하는지 확인합니다. 이 경로는 방 상태나 인증 정보를 노출하지 않습니다.
-5. Vercel 빌드 환경의 `VITE_MULTIPLAYER_URL`을 `wss://실제-Render-호스트/ws`로 설정하고 화면을 다시 배포합니다. 환경변수만 바꾸면 기존 화면 번들에는 반영되지 않습니다.
+1. 현재 Render 서비스는 대시보드에서 수동 구성했으며 `main`의 `5df7f3a`를 배포했습니다. Node.js 24.19.0·Free 단일 인스턴스·Singapore 지역을 사용합니다. 저장소의 `render.yaml`은 이전 작업 브랜치 `0.3.1-private-connection-fix`를 가리키므로 현재 서비스의 배포 브랜치와 다릅니다.
+2. Build Command는 `npm ci && npm run build`, 실제 Start Command는 `npm run start`(`npm start`와 같은 스크립트), Health Check Path는 `/healthz`입니다. `server/start.mjs`는 Render가 제공한 `PORT`로 `0.0.0.0`에서 접속을 받습니다. [Render Web Service 설정](https://render.com/docs/web-services)을 참고하세요.
+3. 현재 Render의 `MULTIPLAYER_ALLOWED_ORIGINS`는 `https://surf-prototype.vercel.app`만 허용합니다. Preview에서 같은 서버를 테스트하려면 해당 출처를 정확히 추가해야 합니다.
+4. [서버 상태 확인](https://surf-multiplayer.onrender.com/healthz)은 HTTP 200과 `{"status":"ok","service":"surf-multiplayer"}`를 반환합니다. 이 경로는 방 상태나 인증 정보를 노출하지 않습니다.
+5. Vercel Production의 `VITE_MULTIPLAYER_URL`은 `wss://surf-multiplayer.onrender.com/ws`이며 설정 후 화면을 재배포했습니다. 환경변수만 바꾸면 기존 화면 번들에는 반영되지 않습니다.
 6. 공개 화면의 독립된 두 클라이언트에서 방 생성·6자리 코드 참가·준비·소환·결과·재대전을 확인하고 [공개 PVP 배포 개발문서](Docs/개발문서/공개PVP배포.md)에 실제 배포 URL과 검증 범위를 기록합니다.
 
 방은 한 프로세스의 메모리에서 공유하므로 서버를 단일 인스턴스로 운영합니다. 재시작·재배포·절전으로 프로세스가 종료되면 방이 사라집니다. 경기 중 연결 종료는 기존 규칙대로 패배이며 재접속은 제공하지 않습니다.
 
 Render Free는 HTTP 요청이나 기존 WebSocket의 수신 메시지가 15분 동안 없으면 절전하고, 다음 요청이나 새 연결에서 기동하는 데 약 1분이 걸릴 수 있습니다. [Render Free의 절전 제한](https://render.com/docs/free#spinning-down-on-idle)을 참고하세요. 클라이언트는 최초 연결 전 `/healthz`를 확인하며 최대 120초 동안 기동을 기다립니다. 개별 요청 제한은 10초, 재시도 간격은 2초이며 경기 재접속은 추가하지 않습니다.
 
-PVP 화면은 서버 상태 사이의 좌표를 150ms 동안 보간합니다. 전투 판정·SP·소환·승패는 서버 상태를 따르고 AI 대전의 계산은 유지합니다. 2026-09-30 Node.js 24의 자동 테스트 59개와 타입 검사·프로덕션 빌드가 통과했습니다. 로컬 브라우저 두 클라이언트에서 생성·참가·준비·전투·소환·상대 나가기 후 승리 화면을 확인했으며 실제 Render·Vercel 공개 대전은 별도 검증으로 남아 있습니다.
+PVP 화면은 서버 상태 사이의 좌표를 150ms 동안 보간합니다. 전투 판정·SP·소환·승패는 서버 상태를 따르고 AI 대전의 계산은 유지합니다. 2026-09-30 Node.js 24의 자동 테스트 59개와 타입 검사·프로덕션 빌드가 통과했습니다. Render와 Vercel은 `main`의 `5df7f3a` 배포가 각각 Live·Ready 상태이며, 세 모드의 공개 WebSocket 방 생성·참가·덱 비공개·전투·소환·이탈을 검증했습니다. 실제 공개 브라우저 두 탭에서도 전투·결과·재대전·상대 나가기 후 승리 화면을 확인했습니다. 서로 다른 기기·네트워크에서는 아직 검증하지 않았습니다. 배포 ID와 상세 흐름은 [공개 PVP 검증 기록](Docs/개발문서/공개PVP배포.md)에 남겼습니다.
 
 ## 구성
 
@@ -103,11 +103,11 @@ Vercel 설정은 다음 값을 사용합니다.
 | Build Command | `npm run build` |
 | Output Directory | `dist` |
 | Production Branch | `main` |
-| 빌드 환경변수 | `VITE_MULTIPLAYER_URL=wss://실제-Render-호스트/ws` |
+| Production 빌드 환경변수 | `VITE_MULTIPLAYER_URL=wss://surf-multiplayer.onrender.com/ws` |
 
 Vercel에서 이 저장소를 Import하고 Git 연동을 유지하면 다음 흐름으로 테스트합니다.
 
-Vercel에는 정적 프런트엔드를 배포하고 비공개 PVP 연결은 Render 서버의 `/ws`로 전달합니다. 실제 Render 서버 연결과 공개 사이트 대전 검증은 아직 수행하지 않았습니다.
+Vercel에는 정적 프런트엔드를 배포하고 비공개 PVP 연결은 Render 서버의 `/ws`로 전달합니다. 2026-09-30 Production 재배포와 공개 브라우저 두 탭의 대전·재대전을 검증했습니다. 현재 Render 서버는 Production 출처만 허용합니다.
 
 1. 최신 `dev`에서 새 개발 브랜치를 만들고 구현·검증합니다.
 2. 구현 후 로컬 서버를 실행하고 브라우저를 팝업해 사용자가 직접 테스트하도록 합니다.
