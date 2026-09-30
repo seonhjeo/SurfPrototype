@@ -12,7 +12,8 @@ type Position = { x: number; y: number };
 type Drag = { pointer: number; unit: UnitId; x: number; y: number; moved: boolean; button: HTMLButtonElement };
 const other = (side: Side): Side => side === 'player' ? 'enemy' : 'player';
 const spRecovery = (gameMode: GameModeId) => GAME_MODES[gameMode].spRegen ? `+${GAME_MODES[gameMode].spRegen} / 초` : '자동 획득 없음';
-const spRules = (gameMode: GameModeId) => `시작 ${GAME_MODES[gameMode].initialSp} SP · ${spRecovery(gameMode)}`;
+const killSpRule = (gameMode: GameModeId) => GAME_MODES[gameMode].killSpRewards ? '처치 SP 획득' : '처치 SP 없음';
+const spRules = (gameMode: GameModeId) => `시작 ${GAME_MODES[gameMode].initialSp} SP · ${spRecovery(gameMode)} · ${killSpRule(gameMode)}`;
 const clock = (seconds: number) => `${Math.floor(Math.max(0, seconds) / 60).toString().padStart(2, '0')}:${Math.floor(Math.max(0, seconds) % 60).toString().padStart(2, '0')}`;
 const escape = (value: string) => value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 const resultReason = (reason: string) => ({ 'fort-destroyed': '성채가 파괴되어 전투가 종료되었습니다.', timeout: '제한시간 종료 · 남은 성채 체력으로 판정했습니다.', surrender: '상대가 경기를 떠났습니다.' })[reason] ?? reason;
@@ -262,7 +263,7 @@ export class SurfApp {
     this.status.textContent = '전투 시작. 카드를 누르거나 전장 아래쪽으로 드래그해 소환하세요.';
     this.screen.innerHTML = `<section class="battle screen-content" aria-label="성채 공방전 ${GAME_MODES[this.gameMode].name}">
       <div class="battle-heading"><div><span class="live-dot"></span><strong>${map.name}</strong><span>${weather.icon} ${weather.name}</span></div><strong class="match-timer" id="match-timer">05:00</strong><button class="text-button exit-button" data-action="leave" type="button" title="전투에서 나가면 패배합니다">나가기</button></div>
-      <p class="battle-map-gimmick">${GAME_MODES[this.gameMode].name} · ${map.gimmickDescription}</p>
+      <p class="battle-map-gimmick">${GAME_MODES[this.gameMode].name} · ${killSpRule(this.gameMode)} · ${map.gimmickDescription}</p>
       <div class="fort-hud"><div class="fort-tile own"><div><span>♜ 나의 성채</span><strong id="own-hp">1,000</strong></div><div class="hp-track"><span id="own-hp-bar"></span></div></div><span class="versus">VS</span><div class="fort-tile enemy"><div><span>상대 성채 ♜</span><strong id="enemy-hp">1,000</strong></div><div class="hp-track"><span id="enemy-hp-bar"></span></div></div></div>
       <div class="battle-arena"><div id="game" role="img" aria-label="자동 전투 전장. 내 유닛은 아래에서 위로 전진합니다."></div><div class="wave-pill" id="wave-info">첫 웨이브 준비 중</div><div class="boss-alert" id="boss-alert" role="status"></div></div>
       <div class="battle-footer"><div class="resource-row"><div class="sp-label"><span class="sp-gem" aria-hidden="true">◆</span><strong id="sp-value">${GAME_MODES[this.gameMode].initialSp}</strong><span>/ ${SP_MAX} SP</span></div><div class="sp-track"><span id="sp-bar"></span></div><span class="regen-label">${spRecovery(this.gameMode)}</span></div><div class="battle-hand">${this.deck.map((id) => `<button class="battle-card" type="button" data-summon="${id}" aria-label="${UNITS[id].name} 소환, ${UNITS[id].cost} SP"><span class="battle-card-cost">${UNITS[id].cost}</span><span class="battle-card-icon" aria-hidden="true">${UNITS[id].icon}</span><strong>${UNITS[id].name}</strong></button>`).join('')}</div><p class="battle-instruction" id="battle-instruction">눌러서 소환 · 아래쪽 전장으로 드래그해 위치 지정</p></div>

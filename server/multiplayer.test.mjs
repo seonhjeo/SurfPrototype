@@ -4,6 +4,7 @@ import { once } from 'node:events';
 import test from 'node:test';
 import { WebSocket } from 'ws';
 import { Simulation } from '../src/game/simulation.ts';
+import { GAME_MODES } from '../src/game/data.ts';
 import { createMultiplayerServer } from './multiplayer.mjs';
 
 const hostDeck = ['warrior', 'archer', 'shield', 'hunter', 'mage'];
@@ -119,30 +120,36 @@ test('private room validates codes and capacity, starts on readiness, and keeps 
   assert.deepEqual(hostBattle.state.sp, { player: 5, enemy: 5 });
 });
 
-test('limited SP room validates its mode and applies host rules to both players', async (t) => {
+for (const gameMode of ['limited-sp', 'no-kill-sp']) test(`${gameMode}: room validates its mode and applies host rules to both players`, async (t) => {
   const f = await fixture(t);
   const host = await f.client();
   for (const gameMode of ['unknown', '__proto__', 'constructor', null, 20, {}]) {
     assert.match((await request(host, { type: 'create', gameMode }, isError)).message, /게임 모드/);
   }
-  const created = await request(host, { type: 'create', gameMode: 'limited-sp' }, isRoom);
-  assert.equal(created.gameMode, 'limited-sp');
+  const created = await request(host, { type: 'create', gameMode }, isRoom);
+  assert.equal(created.gameMode, gameMode);
   const guest = await f.client();
   const joined = await request(guest, { type: 'join', code: created.code, gameMode: 'standard' }, isRoom);
-  assert.equal(joined.gameMode, 'limited-sp', 'joining uses the room rules');
+  assert.equal(joined.gameMode, gameMode, 'joining uses the room rules');
   await request(host, { type: 'deck', deck: hostDeck }, isRoom);
   await request(guest, { type: 'deck', deck: guestDeck }, isRoom);
   await start(host, guest);
   const initial = await waitFor(host, (message) => message.type === 'battle');
-  assert.equal(initial.state.gameMode, 'limited-sp');
+  assert.equal(initial.state.gameMode, gameMode);
   assert.deepEqual(initial.state.sp, { player: 20, enemy: 20 });
   const elapsed = await waitFor(guest, (message) => message.type === 'battle' && message.state.time >= 1);
-  assert.equal(elapsed.state.gameMode, 'limited-sp');
-  assert.deepEqual(elapsed.state.sp, { player: 20, enemy: 20 });
-  const summoned = await request(host, { type: 'summon', unitId: 'mage' }, (message) => message.type === 'battle' && message.state.sp.player === 10);
-  assert.equal(summoned.state.sp.enemy, 20);
-  const opponent = await request(guest, { type: 'summon', unitId: 'knight' }, (message) => message.type === 'battle' && message.state.sp.enemy === 10);
-  assert.deepEqual(opponent.state.sp, { player: 10, enemy: 10 });
+  assert.equal(elapsed.state.gameMode, gameMode);
+  const assertSp = (state, costs) => {
+    for (const side of ['player', 'enemy']) {
+      const expected = 20 + state.time * GAME_MODES[gameMode].spRegen - costs[side];
+      assert.ok(Math.abs(state.sp[side] - expected) < 1e-8, `${side} SP follows room income and summon costs`);
+    }
+  };
+  assertSp(elapsed.state, { player: 0, enemy: 0 });
+  const summoned = await request(host, { type: 'summon', unitId: 'mage' }, (message) => message.type === 'battle' && message.state.units.some((unit) => unit.side === 'player' && unit.unitId === 'mage'));
+  assertSp(summoned.state, { player: 10, enemy: 0 });
+  const opponent = await request(guest, { type: 'summon', unitId: 'knight' }, (message) => message.type === 'battle' && message.state.units.some((unit) => unit.side === 'enemy' && unit.unitId === 'knight'));
+  assertSp(opponent.state, { player: 10, enemy: 10 });
 });
 
 test('empty, duplicate, unknown and locked decks are rejected and guest departure resets preparation', async (t) => {
@@ -209,7 +216,7 @@ test('summoning is authoritative and battle disconnection forfeits without recon
   assert.match((await request(reconnect, { type: 'join', code }, isError)).message, /종료된 경기/);
 });
 
-for (const gameMode of ['standard', 'limited-sp']) test(`${gameMode}: both rematch requests preserve mode and reset the battle`, async (t) => {
+for (const gameMode of Object.keys(GAME_MODES)) test(`${gameMode}: both rematch requests preserve mode and reset the battle`, async (t) => {
   const f = await fixture(t, {
     createSimulation(configuration) {
       const simulation = new Simulation(configuration);
@@ -243,7 +250,7 @@ for (const gameMode of ['standard', 'limited-sp']) test(`${gameMode}: both remat
   await start(host, guest);
   const battle = await waitFor(host, (message) => message.type === 'battle', after);
   assert.equal(battle.state.gameMode, gameMode);
-  const initialSp = gameMode === 'limited-sp' ? 20 : 5;
+  const initialSp = GAME_MODES[gameMode].initialSp;
   assert.deepEqual(battle.state.sp, { player: initialSp, enemy: initialSp });
 });
 
