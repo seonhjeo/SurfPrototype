@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { MapId, Side } from './data.ts';
 import type { BattleState } from './simulation.ts';
+import type { BattlePresentation } from './battle-presentation.ts';
 
 export const GAME_SIZE = { width: 360, height: 600 };
 const SCALE = 30;
@@ -32,7 +33,7 @@ export class BattleScene extends Phaser.Scene {
   private paintedMap: MapId | null = null;
   private preview: { x: number; y: number; valid: boolean; icon: string } | null = null;
 
-  constructor(private readState: () => BattleState | null, private readSide: () => Side) {
+  constructor(private readState: () => BattleState | null, private readSide: () => Side, private readPresentation?: () => BattlePresentation | null) {
     super('battle');
   }
 
@@ -101,8 +102,10 @@ export class BattleScene extends Phaser.Scene {
   }
 
   update(_time: number) {
-    const state = this.readState();
+    const presentation = this.readPresentation?.();
+    const state = presentation?.state ?? this.readState();
     if (!state || !this.ink) return;
+    const visualTime = presentation?.visualTime ?? state.time;
     if (state.map !== this.paintedMap) this.drawTerrain(state.map);
     const g = this.ink.clear();
     this.usedLabels.clear();
@@ -166,13 +169,13 @@ export class BattleScene extends Phaser.Scene {
     }
     for (const effect of state.effects) {
       const p = this.point(effect.x, effect.y);
-      const life = Math.min(1, Math.max(0, (effect.expiresAt - state.time) / 0.4));
+      const life = Math.min(1, Math.max(0, (effect.expiresAt - visualTime) / 0.4));
       g.lineStyle(2, effect.kind === 'skill' ? GOLD : 0xffffff, life).strokeCircle(p.x, p.y, 7 + (1 - life) * 13);
     }
     for (let i = 0; i < state.warnings.length; i++) {
       const warning = state.warnings[i];
       const p = this.point(warning.x, warning.y);
-      const pulse = 18 + Math.sin(state.time * 9) * 3;
+      const pulse = 18 + Math.sin(visualTime * 9) * 3;
       g.fillStyle(0xa84642, 0.14).fillCircle(p.x, p.y, pulse + 6);
       g.lineStyle(2, 0xa84642, 0.8).strokeCircle(p.x, p.y, pulse);
       this.label(`warn-${i}`, `! ${Math.max(1, Math.ceil(warning.spawnAt - state.time))}`, p.x, p.y, 13, '#8a2b32');
@@ -180,13 +183,13 @@ export class BattleScene extends Phaser.Scene {
     if (state.weather === 'rain') {
       g.lineStyle(1, 0xe5f3f3, 0.3);
       for (let i = 0; i < 28; i++) {
-        const x = (i * 79 + state.time * 22) % 360;
-        const y = (i * 137 + state.time * 280) % 600;
+        const x = (i * 79 + visualTime * 22) % 360;
+        const y = (i * 137 + visualTime * 280) % 600;
         g.lineBetween(x, y, x - 3, y + 10);
       }
     } else if (state.weather === 'fog') {
-      g.fillStyle(0xf4f5e8, 0.12).fillEllipse(105 + Math.sin(state.time * 0.12) * 60, 205, 480, 140);
-      g.fillStyle(0xf4f5e8, 0.12).fillEllipse(265 - Math.sin(state.time * 0.1) * 70, 420, 450, 150);
+      g.fillStyle(0xf4f5e8, 0.12).fillEllipse(105 + Math.sin(visualTime * 0.12) * 60, 205, 480, 140);
+      g.fillStyle(0xf4f5e8, 0.12).fillEllipse(265 - Math.sin(visualTime * 0.1) * 70, 420, 450, 150);
     }
     if (this.preview) {
       const p = this.point(this.preview.x, this.preview.y);

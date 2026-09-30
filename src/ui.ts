@@ -4,6 +4,7 @@ import { completeDeck, DECK_DURATION, DECK_SIZE, FORT_RADIUS, GAME_MODES, MAPS, 
 import type { Environment, GameModeId, Side, UnitId } from './game/data';
 import { Simulation } from './game/simulation';
 import type { BattleState } from './game/simulation';
+import { BattleSnapshotInterpolator } from './game/battle-presentation';
 import { RoomConnection } from './network';
 import type { RoomMessage, RoomStateMessage } from './network';
 
@@ -47,6 +48,7 @@ export class SurfApp {
   private room: RoomStateMessage | null = null;
   private simulation: Simulation | null = null;
   private state: BattleState | null = null;
+  private presentation = new BattleSnapshotInterpolator();
   private game: Phaser.Game | null = null;
   private scene: BattleScene | null = null;
   private screenEvents = new AbortController();
@@ -148,7 +150,7 @@ export class SurfApp {
   private async connectRoom(code?: string) {
     this.exitConnection(false);
     this.pending = true; this.screen.querySelectorAll<HTMLButtonElement>('button').forEach((button) => { button.disabled = true; });
-    this.notice('대전 방에 연결하고 있습니다.');
+    this.notice('대전 서버에 연결 중입니다. 첫 실행은 1분 정도 걸릴 수 있습니다.');
     const token = ++this.generation;
     const connection = new RoomConnection((message) => { if (this.connection === connection) this.handleMessage(message); });
     this.connection = connection; this.mode = 'room';
@@ -169,6 +171,7 @@ export class SurfApp {
     }
     if (message.type === 'closed') { this.returnLobby(false); this.notice(message.message); return; }
     if (message.type === 'battle') {
+      if (this.mode === 'room' && !this.presentation.push(message.state, performance.now())) return;
       this.state = message.state;
       this.gameMode = message.state.gameMode;
       if (this.state.result) { if (this.phase !== 'result') this.renderResult(); }
@@ -178,7 +181,7 @@ export class SurfApp {
     this.room = message; this.side = message.side; this.gameMode = message.gameMode; this.environment = { map: message.map, weather: message.weather };
     this.deck = [...message.deck]; this.ready = message.ready; this.opponentReady = message.opponentReady; this.pending = false;
     if (message.phase === 'waiting') {
-      if (this.phase !== 'waiting') { this.state = null; this.renderWaiting(); } else this.syncWaiting();
+      if (this.phase !== 'waiting') { this.state = null; this.presentation.reset(); this.renderWaiting(); } else this.syncWaiting();
     } else if (message.phase === 'battle' && this.phase !== 'battle' && !this.state?.result) this.renderBattle();
     else if (message.phase === 'result' && this.phase === 'result') this.syncResult();
   }
@@ -268,7 +271,10 @@ export class SurfApp {
       <div class="battle-arena"><div id="game" role="img" aria-label="자동 전투 전장. 내 유닛은 아래에서 위로 전진합니다."></div><div class="wave-pill" id="wave-info">첫 웨이브 준비 중</div><div class="boss-alert" id="boss-alert" role="status"></div></div>
       <div class="battle-footer"><div class="resource-row"><div class="sp-label"><span class="sp-gem" aria-hidden="true">◆</span><strong id="sp-value">${GAME_MODES[this.gameMode].initialSp}</strong><span>/ ${SP_MAX} SP</span></div><div class="sp-track"><span id="sp-bar"></span></div><span class="regen-label">${spRecovery(this.gameMode)}</span></div><div class="battle-hand">${this.deck.map((id) => `<button class="battle-card" type="button" data-summon="${id}" aria-label="${UNITS[id].name} 소환, ${UNITS[id].cost} SP"><span class="battle-card-cost">${UNITS[id].cost}</span><span class="battle-card-icon" aria-hidden="true">${UNITS[id].icon}</span><strong>${UNITS[id].name}</strong></button>`).join('')}</div><p class="battle-instruction" id="battle-instruction">눌러서 소환 · 아래쪽 전장으로 드래그해 위치 지정</p></div>
     </section>`;
-    this.scene = new BattleScene(() => this.state, () => this.side);
+    this.scene = new BattleScene(
+      () => this.state, () => this.side,
+      this.mode === 'room' ? () => this.presentation.sample(performance.now()) : undefined,
+    );
     this.game = new Phaser.Game({ type: Phaser.AUTO, parent: 'game', backgroundColor: '#e6decd', scale: { mode: Phaser.Scale.NONE, ...GAME_SIZE }, scene: [this.scene], render: { antialias: true } });
     this.listen('click', (event) => {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button'); if (!button) return;
@@ -361,6 +367,7 @@ export class SurfApp {
     else if (this.room.opponentRematchRequested) this.text('#rematch-status', '상대가 다시 대전하고 싶어 합니다. 신청하면 바로 덱 선택으로 이동합니다.');
   }
   private exitConnection(sendLeave = true) {
+    this.presentation.reset();
     const connection = this.connection; this.connection = null;
     if (sendLeave) connection?.send({ type: 'leave' }); connection?.close();
     if (this.phase === 'battle') this.simulation?.surrender(this.side);
