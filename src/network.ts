@@ -1,4 +1,4 @@
-import type { GameModeId, MapId, Side, UnitId, WeatherId } from './game/data.ts';
+import type { GameModeId, MapId, ModeRules, Side, UnitId, WeatherId } from './game/data.ts';
 import type { BattleState } from './game/simulation.ts';
 import { waitForMultiplayerServer } from './server-warmup.ts';
 
@@ -17,6 +17,7 @@ export interface RoomStateMessage {
   side: Side;
   phase: 'waiting' | 'battle' | 'result';
   gameMode: GameModeId;
+  rules: ModeRules;
   map: MapId;
   weather: WeatherId;
   deck: UnitId[];

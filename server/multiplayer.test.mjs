@@ -4,7 +4,7 @@ import { once } from 'node:events';
 import test from 'node:test';
 import { WebSocket } from 'ws';
 import { Simulation } from '../src/game/simulation.ts';
-import { GAME_MODES } from '../src/game/data.ts';
+import { GAME_MODES, resolveModeRules } from '../src/game/data.ts';
 import { createMultiplayerServer } from './multiplayer.mjs';
 
 const hostDeck = ['warrior', 'archer', 'shield', 'hunter', 'mage'];
@@ -76,6 +76,68 @@ async function start(host, guest) {
   return request(guest, { type: 'ready', ready: true }, (message) => isRoom(message) && message.phase === 'battle');
 }
 
+for (const gameMode of Object.keys(GAME_MODES)) test(`${gameMode}: server owns mode rules through joining and battle`, async (t) => {
+  const f = await fixture(t);
+  const host = await f.client();
+  const forgedRules = { lanes: { count: 3 }, sp: { initial: 9999, max: 9999 }, minions: { enabled: true } };
+  const expected = resolveModeRules(gameMode);
+  const created = await request(host, { type: 'create', gameMode, rules: forgedRules }, isRoom);
+  assert.deepEqual(created.rules, expected, 'untrusted create settings cannot change the server preset');
+  const guest = await f.client();
+  const joined = await request(guest, { type: 'join', code: created.code, gameMode: 'standard', rules: forgedRules }, isRoom);
+  assert.deepEqual(joined.rules, expected);
+  await request(host, { type: 'deck', deck: hostDeck }, isRoom);
+  await request(guest, { type: 'deck', deck: guestDeck }, isRoom);
+  await start(host, guest);
+  const hostBattle = await waitFor(host, (message) => message.type === 'battle');
+  const guestBattle = await waitFor(guest, (message) => message.type === 'battle');
+  assert.deepEqual(hostBattle.state.rules, expected);
+  assert.deepEqual(guestBattle.state.rules, expected);
+  assert.deepEqual(hostBattle.state.decks.enemy, []);
+  assert.deepEqual(guestBattle.state.decks.player, []);
+});
+
+test('enabled feature presets reach both clients with lane assignments, minions and structures', async (t) => {
+  const original = GAME_MODES.standard.rules;
+  t.after(() => { GAME_MODES.standard.rules = original; });
+  GAME_MODES.standard.rules = resolveModeRules('standard', {
+    lanes: { count: 3 }, neutralWaves: { enabled: false }, minions: { enabled: true },
+    towers: { enabled: true }, spBox: { enabled: true },
+    sp: { initial: 100, maximum: 100, passive: { enabled: false } },
+  });
+  const f = await fixture(t, {
+    createSimulation(configuration) {
+      const simulation = new Simulation(configuration);
+      simulation.update(5);
+      return simulation;
+    },
+  });
+  const { host, guest } = await pair(f);
+  await start(host, guest);
+  const first = (await waitFor(host, (message) => message.type === 'battle')).state;
+  assert.equal(first.rules.lanes.count, 3);
+  assert.equal(first.structures.filter((entity) => entity.kind === 'tower').length, 6);
+  assert.equal(first.structures.filter((entity) => entity.kind === 'sp-box').length, 1);
+  assert.equal(first.units.filter((entity) => entity.kind === 'minion').length, 18);
+  const guestState = (await waitFor(guest, (message) => message.type === 'battle')).state;
+  assert.deepEqual(guestState.rules, first.rules);
+  assert.deepEqual(guestState.structures, first.structures);
+  for (const client of [host, guest]) {
+    const side = client === host ? 'player' : 'enemy';
+    await request(client, { type: 'summon', unitId: client === host ? 'warrior' : 'rogue', rules: { lanes: { count: 0 } } },
+      (message) => message.type === 'battle' && message.state.units.some((entity) => entity.kind === 'summoned' && entity.side === side));
+  }
+  const after = await request(host, { type: 'summon', unitId: 'warrior' },
+    (message) => message.type === 'battle' && message.state.units.filter((entity) => entity.kind === 'summoned' && entity.side === 'player').length === 2);
+  const own = after.state.units.filter((entity) => entity.kind === 'summoned' && entity.side === 'player');
+  assert.equal(own.length, 2);
+  assert.notEqual(own[0].lane, own[1].lane, 'the authority balances tap summons across friendly lane populations');
+  assert.equal(after.state.rules.lanes.count, 3);
+  const tower = after.state.structures.find((entity) => entity.kind === 'tower' && entity.side === 'player');
+  const rejected = await request(host, { type: 'summon', unitId: 'warrior', position: { x: tower.x, y: tower.y } }, isError);
+  assert.match(rejected.message, /소환하지 못했습니다/);
+});
+
 test('private room validates codes and capacity, starts on readiness, and keeps opponent deck private', async (t) => {
   const f = await fixture(t);
   const host = await f.client();
@@ -141,7 +203,7 @@ for (const gameMode of ['limited-sp', 'no-kill-sp']) test(`${gameMode}: room val
   assert.equal(elapsed.state.gameMode, gameMode);
   const assertSp = (state, costs) => {
     for (const side of ['player', 'enemy']) {
-      const expected = 20 + state.time * GAME_MODES[gameMode].spRegen - costs[side];
+      const expected = 20 + state.time * (resolveModeRules(gameMode).sp.passive.enabled ? resolveModeRules(gameMode).sp.passive.amount : 0) - costs[side];
       assert.ok(Math.abs(state.sp[side] - expected) < 1e-8, `${side} SP follows room income and summon costs`);
     }
   };
@@ -237,6 +299,8 @@ for (const gameMode of Object.keys(GAME_MODES)) test(`${gameMode}: both rematch 
   assert.equal(restarted.code, code);
   assert.equal(restarted.gameMode, gameMode);
   assert.equal(hostRestart.gameMode, gameMode);
+  assert.deepEqual(restarted.rules, resolveModeRules(gameMode));
+  assert.deepEqual(hostRestart.rules, restarted.rules);
   assert.deepEqual(restarted.deck, []);
   assert.deepEqual(hostRestart.deck, []);
   assert.equal(restarted.ready, false);
@@ -250,7 +314,8 @@ for (const gameMode of Object.keys(GAME_MODES)) test(`${gameMode}: both rematch 
   await start(host, guest);
   const battle = await waitFor(host, (message) => message.type === 'battle', after);
   assert.equal(battle.state.gameMode, gameMode);
-  const initialSp = GAME_MODES[gameMode].initialSp;
+  assert.deepEqual(battle.state.rules, restarted.rules);
+  const initialSp = resolveModeRules(gameMode).sp.initial;
   assert.deepEqual(battle.state.sp, { player: initialSp, enemy: initialSp });
 });
 

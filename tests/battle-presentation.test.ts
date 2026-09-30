@@ -3,6 +3,7 @@ import test from 'node:test';
 import { BattleSnapshotInterpolator, NETWORK_RENDER_DELAY } from '../src/game/battle-presentation.ts';
 import { Simulation } from '../src/game/simulation.ts';
 import type { BattleState } from '../src/game/simulation.ts';
+import { getLaneRoutes, pointOnLane, projectToLane } from '../src/game/lanes.ts';
 
 function snapshot(time: number, x: number): BattleState {
   const simulation = new Simulation({ map: 'desert', weather: 'rain', decks: { player: ['warrior'], enemy: ['warrior'] }, seed: 3 });
@@ -16,6 +17,28 @@ function snapshot(time: number, x: number): BattleState {
   return state;
 }
 const near = (actual: number, expected: number) => assert.ok(Math.abs(actual - expected) < 1e-8, `${actual} != ${expected}`);
+
+test('network rendering follows lane bends instead of cutting across the terrain', () => {
+  const simulation = new Simulation({ map: 'road', weather: 'sunny', decks: { player: ['warrior'], enemy: ['warrior'] }, rules: { lanes: { count: 3 } } });
+  assert.equal(simulation.summon('player', 'warrior'), true);
+  const route = getLaneRoutes(3)[0];
+  const previous = simulation.snapshot();
+  const latest = simulation.snapshot();
+  const bend = route.cumulative[1];
+  for (const [state, progress] of [[previous, bend - 0.6], [latest, bend + 0.6]] as const) {
+    Object.assign(state.units[0], { lane: 0, laneEntering: false, laneProgress: progress }, pointOnLane(route, progress));
+  }
+  latest.time = 0.1;
+  const interpolation = new BattleSnapshotInterpolator();
+  interpolation.push(previous, 0); interpolation.push(latest, 100);
+  for (const offset of [20, 50, 80]) {
+    const frame = interpolation.sample(NETWORK_RENDER_DELAY + offset)!;
+    near(projectToLane(route, frame.state.units[0]).distance, 0);
+  }
+  const middle = interpolation.sample(NETWORK_RENDER_DELAY + 50)!;
+  const point = pointOnLane(route, bend);
+  near(middle.state.units[0].x, point.x); near(middle.state.units[0].y, point.y);
+});
 
 test('100 ms snapshots render continuous unit and projectile positions between authoritative updates', () => {
   const interpolation = new BattleSnapshotInterpolator();

@@ -65,6 +65,48 @@ Render Free는 HTTP 요청이나 기존 WebSocket의 수신 메시지가 15분 �
 
 PVP 화면은 서버 상태 사이의 좌표를 150ms 동안 보간합니다. 전투 판정·SP·소환·승패는 서버 상태를 따르고 AI 대전의 계산은 유지합니다. 2026-09-30 Node.js 24의 자동 테스트 59개와 타입 검사·프로덕션 빌드가 통과했습니다. Render와 Vercel은 `main`의 `5df7f3a` 배포가 각각 Live·Ready 상태이며, 세 모드의 공개 WebSocket 방 생성·참가·덱 비공개·전투·소환·이탈을 검증했습니다. 실제 공개 브라우저 두 탭에서도 전투·결과·재대전·상대 나가기 후 승리 화면을 확인했습니다. 서로 다른 기기·네트워크에서는 아직 검증하지 않았습니다. 배포 ID와 상세 흐름은 [공개 PVP 검증 기록](Docs/개발문서/공개PVP배포.md)에 남겼습니다.
 
+## 모드 설정으로 기능 조합하기
+
+기존 세 모드는 `src/game/data.ts`의 `GAME_MODES`에서 하나의 `rules` 설정을 사용합니다. 기본값은 기존 플레이와 동일합니다. 라인은 0개이며 성채 미니언·성채 공격·포탑·SP 상자는 모두 꺼져 있습니다. 설정 구조와 초기 수치는 `src/game/mode-settings.ts`, 이동 경로는 `src/game/lanes.ts`에서 관리합니다.
+
+| 설정 | 역할 |
+| --- | --- |
+| `lanes.count` | 0: 자유 이동, 1~3: 라인 이동·같은 라인 전투 |
+| `neutralWaves.enabled` | 중립 몬스터·보스 소환 여부, 미니언 소환과 독립 |
+| `minions.enabled` | 라인당 일반 3마리와 매 5회 엘리트 추가 |
+| `fortAttacks.catapult.enabled`, `fortAttacks.oil.enabled` | 성채의 공격 수단을 각각 켜거나 끔 |
+| `towers.enabled` | 양 진영 라인별 전방 포탑 |
+| `spBox.enabled`, `spBox.respawnDelay` | 중앙 SP 상자, `null`이면 파괴 후 사라짐, 숫자이면 해당 초 후 재생성 |
+| `sp.initial`, `sp.maximum` | 시작 SP·보유 상한 |
+| `sp.passive` | 시간당 획득 여부·초당 획득량 |
+| `sp.summoned`, `sp.minion`, `sp.elite`, `sp.neutral` | 종류별 처치 획득 여부·고정량·배율 |
+
+보상 설정의 `amount: null`은 각 개체의 기존 보상량을 사용합니다. 숫자는 고정 보상으로 대체하며, `multiplier`를 곱합니다. `enabled: false`이면 지급하지 않습니다. `neutral`은 일반 중립과 중립 보스 모두에 적용합니다. SP 상자는 실제로 줄어든 체력에 `spPerDamage`를 곱해 지급하므로 과잉 피해로 보상이 늘어나지 않습니다.
+
+개발 중 한 경기에서 모든 기능을 확인하는 예:
+
+```ts
+const simulation = new Simulation({
+  map: 'road', weather: 'sunny',
+  decks: { player: ['warrior', 'archer', 'hunter'], enemy: ['warrior', 'archer', 'hunter'] },
+  aiSides: ['enemy'],
+  rules: {
+    lanes: { count: 3 },
+    minions: { enabled: true },
+    fortAttacks: { catapult: { enabled: true }, oil: { enabled: true } },
+    towers: { enabled: true },
+    spBox: { enabled: true, respawnDelay: 30 },
+    sp: { minion: { enabled: true, amount: 2 } },
+  },
+});
+```
+
+실제 모드에 적용하려면 `GAME_MODES`의 해당 모드 `rules`를 같은 방식으로 조합합니다. 설정은 AI와 PVP의 공통 전투 계산에 적용되며, 로비의 별도 커스텀 설정 화면은 추가하지 않습니다. PVP 서버는 모드 ID로 확정한 규칙을 방 생성 시 보관하고 참가자에게 전송하며 재대전에도 유지합니다. 참가자가 보낸 임의 규칙은 적용하지 않습니다. 프런트와 게임 서버 모두 같은 코드를 배포해야 합니다.
+
+로컬에서 새 기능을 직접 확인하려면 `npm run dev` 실행 후 `/tests/manual/mode-preview.html?lanes=3`에 접속합니다. `lanes=0`, `1`, `2`, `3`을 바꿔 확인할 수 있습니다. 이 AI 전용 검증 페이지는 시작 SP 40·상한 80, 모든 새 기능 ON·상자 15초 재생성을 사용하며 실제 세 모드의 기본값이나 Production 빌드를 변경하지 않습니다.
+
+세부 규칙과 위임된 초기 수치는 [게임 모드 기획](Docs/기획서/게임모드.md) 및 연결된 라인·미니언·구조물 문서에서 확인할 수 있습니다.
+
 ## 구성
 
 | 위치 | 역할 |

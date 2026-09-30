@@ -1,7 +1,7 @@
 import { randomInt } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { WebSocket, WebSocketServer } from 'ws';
-import { DECK_DURATION, DECK_SIZE, GAME_MODES, UNIT_IDS, completeDeck, randomEnvironment } from '../src/game/data.ts';
+import { DECK_DURATION, DECK_SIZE, GAME_MODES, UNIT_IDS, completeDeck, randomEnvironment, resolveModeRules } from '../src/game/data.ts';
 import { Simulation } from '../src/game/simulation.ts';
 
 const SIDES = ['player', 'enemy'];
@@ -35,6 +35,7 @@ export function createMultiplayerServer(httpServer, options = {}) {
     return {
       type: 'room', code: room.code, side, phase: room.phase,
       map: room.map, weather: room.weather, gameMode: room.gameMode, deck: [...own.deck],
+      rules: room.simulation?.state.rules ?? room.rules,
       ready: own.ready, opponentReady: other?.ready ?? false,
       opponentConnected: other?.socket?.readyState === WebSocket.OPEN,
       remaining: room.phase === 'waiting' && room.deadline !== null
@@ -66,6 +67,7 @@ export function createMultiplayerServer(httpServer, options = {}) {
     for (const side of SIDES) room.members[side].deck = completeDeck(room.members[side].deck);
     room.simulation = createSimulation({
       map: room.map, weather: room.weather, gameMode: room.gameMode,
+      rules: room.rules,
       decks: { player: room.members.player.deck, enemy: room.members.enemy.deck },
       seed: randomInt(0, 2 ** 31),
     });
@@ -117,7 +119,7 @@ export function createMultiplayerServer(httpServer, options = {}) {
         let code;
         do { code = String(randomInt(100000, 1000000)); } while (rooms.has(code));
         const room = {
-          code, gameMode, ...randomEnvironment(), phase: 'waiting', deadline: null,
+          code, gameMode, rules: resolveModeRules(gameMode), ...randomEnvironment(), phase: 'waiting', deadline: null,
           members: { player: member(socket), enemy: null }, simulation: null,
         };
         rooms.set(code, room);
