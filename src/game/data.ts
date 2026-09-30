@@ -40,6 +40,10 @@ export interface MapDefinition {
   id: MapId;
   name: string;
   subtitle: string;
+  gimmickDescription: string;
+  // Ordinary monsters per spawn point and destination side; each wave has four groups.
+  monstersPerSpawnPoint: number;
+  neutralMoveMultiplier: number;
   color: number;
   groundColor: number;
   monster: MonsterDefinition;
@@ -189,24 +193,28 @@ export const UNITS: Record<UnitId, UnitDefinition> = {
 export const MAPS: Record<MapId, MapDefinition> = {
   desert: {
     id: 'desert', name: '사막', subtitle: '작은 전갈 · 거대 전갈',
+    gimmickDescription: '좌·우에서 진영마다 일반 몬스터 2마리씩', monstersPerSpawnPoint: 2, neutralMoveMultiplier: 1,
     color: 0xdcb16a, groundColor: 0x493d2c,
     monster: { name: '작은 전갈', hp: 6, attack: 3, speed: 1, attackInterval: 1.5, detection: 3, range: 1, reward: 1 },
     boss: { name: '거대 전갈', hp: 180, attack: 12, speed: 0.9, attackInterval: 2, detection: 4, range: 1.2, reward: 8, icon: '♏' },
   },
   forest: {
     id: 'forest', name: '숲', subtitle: '어린 늑대 · 우두머리 늑대',
+    gimmickDescription: '좌·우에서 진영마다 일반 몬스터 5마리씩', monstersPerSpawnPoint: 5, neutralMoveMultiplier: 1,
     color: 0x8dbb81, groundColor: 0x263c32,
     monster: { name: '어린 늑대', hp: 7, attack: 3, speed: 1.15, attackInterval: 1.3, detection: 3, range: 1, reward: 1 },
     boss: { name: '우두머리 늑대', hp: 160, attack: 14, speed: 1, attackInterval: 1.8, detection: 4, range: 1.2, reward: 8, icon: 'Λ' },
   },
   swamp: {
     id: 'swamp', name: '늪', subtitle: '작은 슬라임 · 거대 슬라임',
+    gimmickDescription: '중립 몬스터·보스 이동속도 +30%', monstersPerSpawnPoint: 3, neutralMoveMultiplier: 1.3,
     color: 0xa4b77b, groundColor: 0x333c31,
     monster: { name: '작은 슬라임', hp: 8, attack: 2, speed: 0.85, attackInterval: 1.2, detection: 3, range: 1, reward: 1 },
     boss: { name: '거대 슬라임', hp: 220, attack: 10, speed: 0.8, attackInterval: 2, detection: 4, range: 1.2, reward: 8, icon: '●' },
   },
   road: {
-    id: 'road', name: '중세 도로', subtitle: '떠돌이 도적 · 도적 두목',
+    id: 'road', name: '성 도로', subtitle: '떠돌이 도적 · 도적 두목',
+    gimmickDescription: '맵 추가 효과 없음', monstersPerSpawnPoint: 3, neutralMoveMultiplier: 1,
     color: 0xb3a99c, groundColor: 0x3d3a37,
     monster: { name: '떠돌이 도적', hp: 7, attack: 3, speed: 1, attackInterval: 1.5, detection: 3, range: 1, reward: 1 },
     boss: { name: '도적 두목', hp: 200, attack: 12, speed: 0.9, attackInterval: 2, detection: 4, range: 1.2, reward: 8, icon: '†' },

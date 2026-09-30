@@ -180,8 +180,9 @@ export class Simulation {
     const map = MAPS[this.state.map];
     const multiplier = WAVE_GROWTH ** (wave - 1);
     const grow = (definition: MonsterDefinition) => ({ ...definition, hp: definition.hp * multiplier, attack: definition.attack * multiplier });
-    for (const targetSide of SIDES) for (const x of [0.6, 11.4]) for (let index = 0; index < 3; index++) {
-      const point = { x: x + (x < 6 ? 1 : -1) * index * 0.28, y: 10 + (targetSide === 'player' ? 0.3 : -0.3) + (index - 1) * 0.12 };
+    for (const targetSide of SIDES) for (const x of [0.6, 11.4]) for (let index = 0; index < map.monstersPerSpawnPoint; index++) {
+      // Extra monsters extend into their destination half, keeping every body off the center line.
+      const point = { x: x + (x < 6 ? 1 : -1) * index * 0.28, y: ARENA_HEIGHT / 2 + (targetSide === 'player' ? 1 : -1) * (0.18 + index * 0.12) };
       this.state.units.push(this.createUnit('neutral', targetSide, point, grow(map.monster), false));
     }
     for (const warning of this.state.warnings) this.state.units.push(this.createUnit('neutral', warning.targetSide, warning, grow(map.boss), true));
@@ -267,7 +268,7 @@ export class Simulation {
   }
 
   private movementMultiplier(unit: UnitEntity): number {
-    let multiplier = unit.side === 'neutral' ? 1 : WEATHER[this.state.weather].moveMultiplier;
+    let multiplier = unit.side === 'neutral' ? MAPS[this.state.map].neutralMoveMultiplier : WEATHER[this.state.weather].moveMultiplier;
     if (this.state.zones.some((zone) => zone.side !== unit.side && zone.expiresAt > this.state.time && distance(zone, unit) <= zone.radius + EPS)) multiplier *= STATUS.slowMultiplier;
     return multiplier;
   }
