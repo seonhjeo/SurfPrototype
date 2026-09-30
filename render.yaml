@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: surf-multiplayer
+    runtime: node
+    plan: free
+    region: singapore
+    branch: 0.3.1-private-connection-fix
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: 24.19.0
+      - key: MULTIPLAYER_ALLOWED_ORIGINS
+        sync: false

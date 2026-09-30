@@ -29,7 +29,7 @@ npm test
 npm run preview
 ```
 
-`build`는 타입 검사를 포함하며 결과물은 `dist/`입니다. `npm test`는 전투 규칙과 WebSocket 방 흐름을 검증합니다.
+`build`는 타입 검사를 포함하며 결과물은 `dist/`입니다. `npm test`는 전투 규칙·WebSocket 방 흐름·서버 기동 대기·화면 보간을 검증합니다.
 `npm run preview`는 정적 화면 확인용 서버이며 기본 주소는 `http://127.0.0.1:4173`입니다. 자체 PVP 서버를 제공하지 않습니다.
 
 ## 다른 기기에서 PVP 테스트
@@ -39,14 +39,31 @@ npm run preview
 3. 첫 기기에서 비공개 방을 만들고, 두 번째 기기에서 표시된 6자리 코드로 참가합니다.
 4. 양쪽에서 덱 선택·준비 후 대전합니다. 상대 덱은 전송하지 않으며 전투 판정·SP·소환은 서버가 검증합니다.
 
-서로 다른 외부 네트워크에서는 두 기기가 접근할 수 있는 공개 Node.js 서버가 필요합니다.
+서로 다른 외부 네트워크에서 대전하려면 두 기기가 접근할 수 있는 Node.js 서버가 필요합니다. 공개 구성은 Vercel 화면과 Render WebSocket 서버를 사용합니다.
 `npm run build` 후 `npm start`로 화면과 PVP 서버를 함께 실행할 수 있으며 `PORT`로 포트를 지정합니다.
 프로덕션 서버에는 `dist/`, `server/`, `src/game/`, `package.json`과 설치된 의존성이 필요합니다.
 HTTPS 앞단에서는 WebSocket 업그레이드를 `/ws`로 전달하도록 구성합니다.
 
 화면과 서버를 따로 배포할 경우 빌드 환경에 `VITE_MULTIPLAYER_URL`을 공개 `wss://서버주소/ws`로 설정합니다.
-이 값은 공개 접속 주소이며 비밀키가 아닙니다. 서버의 `MULTIPLAYER_ALLOWED_ORIGINS`에는 허용할 화면 출처를 쉼표로 구분해 지정할 수 있습니다.
+이 값은 공개 접속 주소이며 비밀키가 아닙니다. 서버의 `MULTIPLAYER_ALLOWED_ORIGINS`에는 허용할 화면 출처를 쉼표로 구분해 지정합니다. 출처는 프로토콜·호스트·필요한 포트만 포함하며 경로나 끝 슬래시는 넣지 않습니다.
 선택 환경변수는 값 없는 [.env.example](.env.example)에 정리했습니다. `PORT`·서버 출처 제한은 프로세스 환경으로 전달합니다.
+
+## Render WebSocket 서버 배포
+
+Vercel은 화면을 배포하고 Render의 단일 Node.js 24 프로세스가 기존 WebSocket 연결과 방·전투를 관리합니다. 서버가 입장·덱·준비·SP·소환·결과를 검증하며 각 참가자에게 자신의 덱만 전달합니다. 실제 Render 서비스 연결과 공개 사이트 대전 검증은 아직 완료하지 않았습니다.
+
+1. Render Web Service에 이 저장소의 검증할 작업 브랜치를 연결합니다. Node.js 24.19.0·Free 단일 인스턴스·Singapore 지역을 사용하며 저장소의 `render.yaml`을 기준으로 설정합니다.
+2. Build Command는 `npm ci && npm run build`, Start Command는 `npm start`, Health Check Path는 `/healthz`를 사용합니다. `server/start.mjs`는 Render가 제공한 `PORT`로 `0.0.0.0`에서 접속을 받습니다. [Render Web Service 설정](https://render.com/docs/web-services)을 참고하세요.
+3. Render의 `MULTIPLAYER_ALLOWED_ORIGINS`에 실제 Vercel 화면 출처를 설정합니다. Production과 테스트할 Preview 출처를 각각 정확히 지정합니다.
+4. 서버 배포 후 `https://실제-Render-호스트/healthz`가 HTTP 200과 `{"status":"ok","service":"surf-multiplayer"}`를 반환하는지 확인합니다. 이 경로는 방 상태나 인증 정보를 노출하지 않습니다.
+5. Vercel 빌드 환경의 `VITE_MULTIPLAYER_URL`을 `wss://실제-Render-호스트/ws`로 설정하고 화면을 다시 배포합니다. 환경변수만 바꾸면 기존 화면 번들에는 반영되지 않습니다.
+6. 공개 화면의 독립된 두 클라이언트에서 방 생성·6자리 코드 참가·준비·소환·결과·재대전을 확인하고 [공개 PVP 배포 개발문서](Docs/개발문서/공개PVP배포.md)에 실제 배포 URL과 검증 범위를 기록합니다.
+
+방은 한 프로세스의 메모리에서 공유하므로 서버를 단일 인스턴스로 운영합니다. 재시작·재배포·절전으로 프로세스가 종료되면 방이 사라집니다. 경기 중 연결 종료는 기존 규칙대로 패배이며 재접속은 제공하지 않습니다.
+
+Render Free는 HTTP 요청이나 기존 WebSocket의 수신 메시지가 15분 동안 없으면 절전하고, 다음 요청이나 새 연결에서 기동하는 데 약 1분이 걸릴 수 있습니다. [Render Free의 절전 제한](https://render.com/docs/free#spinning-down-on-idle)을 참고하세요. 클라이언트는 최초 연결 전 `/healthz`를 확인하며 최대 120초 동안 기동을 기다립니다. 개별 요청 제한은 10초, 재시도 간격은 2초이며 경기 재접속은 추가하지 않습니다.
+
+PVP 화면은 서버 상태 사이의 좌표를 150ms 동안 보간합니다. 전투 판정·SP·소환·승패는 서버 상태를 따르고 AI 대전의 계산은 유지합니다. 2026-09-30 Node.js 24의 자동 테스트 59개와 타입 검사·프로덕션 빌드가 통과했습니다. 로컬 브라우저 두 클라이언트에서 생성·참가·준비·전투·소환·상대 나가기 후 승리 화면을 확인했으며 실제 Render·Vercel 공개 대전은 별도 검증으로 남아 있습니다.
 
 ## 구성
 
@@ -56,14 +73,15 @@ HTTPS 앞단에서는 WebSocket 업그레이드를 `/ws`로 전달하도록 구�
 | `src/game/data.ts` | 유닛·맵·날씨·스킬과 밸런스 수치 |
 | `src/game/simulation.ts` | 브라우저·서버 공용 전투 계산과 AI |
 | `src/game/BattleScene.ts` | 연속 좌표 전장과 유닛·성채·효과 렌더링 |
-| `src/network.ts`, `server/` | WebSocket 연결, 비공개 방, 서버 전투 판정 |
-| `tests/`, `server/multiplayer.test.mjs` | 전투·스킬·환경·방 수명 자동 검증 |
+| `src/network.ts`, `server/` | WebSocket 연결, 비공개 방, 서버 전투 판정과 상태 전달 |
+| `tests/`, `server/*.test.mjs` | 전투·스킬·환경·방 수명·서버 기동 대기·화면 보간 자동 검증 |
 | `src/style.css`, `index.html` | 모바일 세로 화면과 접근성 구조 |
 | `public/` | 원본 이름 그대로 배포할 에셋 |
 | `AGENTS.md`, `AgentDocs/` | 지침 관리·연결 링크와 분야별 작업 지침 |
 | `Docs/agents.md`, `Docs/` | 기획서·개발문서, 개발단위별 완료 체크와 파트별 인덱스 |
 | `.github/workflows/ci.yml` | GitHub Actions 타입 검사·빌드 |
 | `vercel.json` | Vercel 설치·빌드·출력 설정 |
+| `render.yaml` | 단일 Node.js WebSocket 서버의 Render 배포 설정 |
 
 ## GitHub → Vercel 배포
 
@@ -85,12 +103,11 @@ Vercel 설정은 다음 값을 사용합니다.
 | Build Command | `npm run build` |
 | Output Directory | `dist` |
 | Production Branch | `main` |
-| 환경변수 | 외부 PVP 서버 사용 시 `VITE_MULTIPLAYER_URL` |
+| 빌드 환경변수 | `VITE_MULTIPLAYER_URL=wss://실제-Render-호스트/ws` |
 
 Vercel에서 이 저장소를 Import하고 Git 연동을 유지하면 다음 흐름으로 테스트합니다.
 
-현재 Vercel 설정은 정적 프런트엔드를 배포합니다. 이번에 추가한 상시 WebSocket 서버는 별도 Node.js 호스트에서 실행해야 합니다.
-외부 서버 주소를 설정하지 않은 정적 배포에서는 AI 대전은 실행되지만 비공개 PVP 연결은 사용할 수 없습니다. 공개 PVP 서버 배포는 아직 수행하지 않았습니다.
+Vercel에는 정적 프런트엔드를 배포하고 비공개 PVP 연결은 Render 서버의 `/ws`로 전달합니다. 실제 Render 서버 연결과 공개 사이트 대전 검증은 아직 수행하지 않았습니다.
 
 1. 최신 `dev`에서 새 개발 브랜치를 만들고 구현·검증합니다.
 2. 구현 후 로컬 서버를 실행하고 브라우저를 팝업해 사용자가 직접 테스트하도록 합니다.
@@ -116,6 +133,6 @@ GitHub Actions는 현재 `main` push, PR, 수동 실행에서 `npm ci`와 `npm r
 - 빠른 반복과 최소한의 구조를 우선합니다. 엔진·백엔드·게임 규칙을 추가할 때는 먼저 범위를 정합니다.
 - `node_modules/`, `dist/`, `.vercel/`, `.env*`는 Git에서 제외합니다. 의존성 변경 시 잠금 파일은 함께 커밋합니다.
 - 브라우저에서 사용하는 `VITE_*` 환경변수는 사용자에게 노출됩니다. 비밀키를 넣지 않습니다.
-- 자동 검증은 타입 검사·빌드·전투 규칙·WebSocket 방 흐름을 포함합니다. 입력·화면 크기·모바일 터치는 브라우저에서 확인합니다.
+- 자동 검증은 타입 검사·빌드·전투 규칙·WebSocket 방 흐름·서버 기동 대기·화면 보간을 포함합니다. 입력·화면 크기·모바일 터치는 브라우저에서 확인합니다.
 
 참고: [Phaser](https://phaser.io/), [Vite 배포](https://vercel.com/docs/frameworks/frontend/vite), [Vercel GitHub 연동](https://vercel.com/docs/git/vercel-for-github), [Node.js 버전](https://vercel.com/docs/functions/runtimes/node-js/node-js-versions), [AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-md).
