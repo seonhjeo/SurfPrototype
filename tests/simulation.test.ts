@@ -104,8 +104,8 @@ test('20 SP modes use unchanged summon costs and reject unaffordable or invalid 
       assert.equal(sim.state.sp[side], 2);
     }
     sim.update(1);
-    near(sim.state.sp.player, 2 + GAME_MODES[gameMode].spRegen);
-    near(sim.state.sp.enemy, 2 + GAME_MODES[gameMode].spRegen);
+    near(sim.state.sp.player, 2 + GAME_MODES[gameMode].rules.sp.passive.amount);
+    near(sim.state.sp.enemy, 2 + GAME_MODES[gameMode].rules.sp.passive.amount);
   }
 });
 
@@ -278,7 +278,7 @@ test('warrior/shield/hunter skills apply exact damage and boss control/double da
   shield.sim.update(0.2);
   near(shield.victim.y, 11.2 - 1.5);
   const hunter = duel('hunter');
-  hunter.victim.side = 'neutral'; hunter.victim.boss = true;
+  hunter.victim.side = 'neutral'; hunter.victim.kind = 'neutral'; hunter.victim.boss = true;
   hunter.attacker.skillReadyAt = 0;
   hunter.sim.update(FIXED_STEP);
   assert.equal(hunter.victim.hp, 170);
@@ -394,9 +394,9 @@ test('ice slow immediately clears outside the final zone; distinct burn and ice 
 test('neutral entities never target each other, can target either player, then march to designated fort', () => {
   const sim = create();
   const neutral = spawn(sim, 'player', 'shield', 6, 12);
-  neutral.side = 'neutral'; neutral.targetSide = 'enemy';
+  neutral.side = 'neutral'; neutral.kind = 'neutral'; neutral.targetSide = 'enemy';
   const other = spawn(sim, 'enemy', 'shield', 6, 11.2);
-  other.side = 'neutral';
+  other.side = 'neutral'; other.kind = 'neutral';
   sim.update(FIXED_STEP);
   assert.equal(neutral.target, null);
   const opponent = spawn(sim, 'player', 'warrior', 6, 11);
@@ -446,12 +446,12 @@ test('neutral kills of either side obey the mode reward rule, including neutral 
     const other = side === 'player' ? 'enemy' : 'player';
     const victim = spawn(sim, side, 'hunter', 6, 12);
     const neutral = spawn(sim, other, 'shield', 6, 11.2);
-    neutral.side = 'neutral'; neutral.unitId = undefined; neutral.boss = boss;
+    neutral.side = 'neutral'; neutral.kind = 'neutral'; neutral.unitId = undefined; neutral.boss = boss;
     neutral.attack = 100; neutral.attackReadyAt = 0; neutral.target = victim.id;
     sim.state.sp.player = 10; sim.state.sp.enemy = 10;
     sim.update(FIXED_STEP);
     assert.equal(victim.hp, 0);
-    const passiveIncome = GAME_MODES[gameMode].spRegen * FIXED_STEP;
+    const passiveIncome = GAME_MODES[gameMode].rules.sp.passive.amount * FIXED_STEP;
     const reward = gameMode === 'no-kill-sp' ? 0 : UNITS.hunter.reward;
     near(sim.state.sp[other], 10 + reward + passiveIncome);
     near(sim.state.sp[side], 10 + passiveIncome);
@@ -464,12 +464,12 @@ test('simultaneous neutral kills reward the first processed side only when mode 
     const first = spawn(two, 'player', 'hunter', 6, 12);
     const second = spawn(two, 'enemy', 'hunter', 6, 10.4);
     const neutral = spawn(two, 'enemy', 'shield', 6, 11.2);
-    neutral.side = 'neutral'; neutral.hp = 6; neutral.reward = 1;
+    neutral.side = 'neutral'; neutral.kind = 'neutral'; neutral.hp = 6; neutral.reward = 1;
     first.target = neutral.id; second.target = neutral.id;
     first.attackReadyAt = 0; second.attackReadyAt = 0;
     two.state.sp.player = 10; two.state.sp.enemy = 10;
     two.update(FIXED_STEP);
-    const passiveIncome = GAME_MODES[gameMode].spRegen * FIXED_STEP;
+    const passiveIncome = GAME_MODES[gameMode].rules.sp.passive.amount * FIXED_STEP;
     const reward = gameMode === 'no-kill-sp' ? 0 : neutral.reward;
     assert.equal(neutral.hp, 0);
     near(two.state.sp.player, 10 + reward + passiveIncome);
@@ -484,7 +484,7 @@ test('all modes apply their reward policy and cap to summoned, neutral and boss 
     const attacker = spawn(sim, side, 'hunter', 6, 12);
     const victim = spawn(sim, other, 'shield', 6, 11.2);
     if (kind !== 'summoned') {
-      victim.side = 'neutral'; victim.boss = kind === 'boss';
+      victim.side = 'neutral'; victim.kind = 'neutral'; victim.boss = kind === 'boss';
       victim.reward = victim.boss ? MAPS.desert.boss.reward : MAPS.desert.monster.reward;
     }
     victim.hp = 1;
@@ -492,7 +492,7 @@ test('all modes apply their reward policy and cap to summoned, neutral and boss 
     sim.state.sp[side] = sp; sim.state.sp[other] = 10;
     sim.update(FIXED_STEP);
     assert.equal(victim.hp, 0);
-    const passiveIncome = GAME_MODES[gameMode].spRegen * FIXED_STEP;
+    const passiveIncome = GAME_MODES[gameMode].rules.sp.passive.amount * FIXED_STEP;
     const reward = gameMode === 'no-kill-sp' ? 0 : victim.reward;
     near(sim.state.sp[side], Math.min(SP_MAX, sp + passiveIncome + reward));
     near(sim.state.sp[other], 10 + passiveIncome);
@@ -526,7 +526,7 @@ test('melee, slash, projectile, explosion, skill, charge, burn and ice deaths al
     sim.update(attack.duration);
     assert.equal(victim.hp, 0, `${gameMode}/${side}/${attack.id}/${attack.skill}/${attack.burn} is lethal`);
     const reward = gameMode === 'no-kill-sp' ? 0 : victim.reward;
-    const passiveIncome = GAME_MODES[gameMode].spRegen * sim.state.time;
+    const passiveIncome = GAME_MODES[gameMode].rules.sp.passive.amount * sim.state.time;
     near(sim.state.sp[side], 10 + reward + passiveIncome);
     near(sim.state.sp[other], 10 + passiveIncome);
   }
@@ -581,7 +581,7 @@ test('swamp increases ordinary neutral and boss movement by 30% through every we
       sim.update(1);
       near(Math.hypot(unit.x - before.x, unit.y - before.y), unit.speed * 1.3);
     }
-    sim.state.zones.push({ id: 999, side: 'player', x: ordinary.x, y: ordinary.y, radius: 2, expiresAt: sim.state.time + 2, nextTickAt: sim.state.time + 10 });
+    sim.state.zones.push({ id: 999, side: 'player', lane: null, x: ordinary.x, y: ordinary.y, radius: 2, expiresAt: sim.state.time + 2, nextTickAt: sim.state.time + 10 });
     const before = { x: ordinary.x, y: ordinary.y };
     sim.update(0.5);
     near(Math.hypot(ordinary.x - before.x, ordinary.y - before.y), ordinary.speed * 1.3 * 0.7 * 0.5);

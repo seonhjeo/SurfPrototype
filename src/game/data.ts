@@ -1,8 +1,12 @@
+import { makeModeRules, mergeModeRules } from './mode-settings.ts';
+import type { ModeRules, ModeRulesOverride } from './mode-settings.ts';
+export type { ModeRules, ModeRulesOverride } from './mode-settings.ts';
+
 export type UnitId =
   | 'warrior' | 'archer' | 'rogue' | 'shield' | 'mage'
   | 'knight' | 'warlock' | 'hunter' | 'commander' | 'archmage';
 export type Side = 'player' | 'enemy';
-export type GameModeId = 'standard' | 'limited-sp' | 'no-kill-sp';
+export type GameModeId = keyof typeof GAME_MODES;
 export type MapId = 'desert' | 'forest' | 'swamp' | 'road';
 export type WeatherId = 'sunny' | 'rain' | 'fog';
 export type AttackKind = 'melee' | 'projectile' | 'slash' | 'fireball' | 'iceball';
@@ -66,22 +70,23 @@ export interface Environment {
 }
 
 export interface GameModeDefinition {
-  id: GameModeId;
+  id: string;
   name: string;
-  initialSp: number;
-  spRegen: number;
-  killSpRewards: boolean;
+  rules: ModeRules;
 }
 
 // Distances use U; speeds use U/s; intervals and durations use seconds.
 export const SP_START = 5;
 export const SP_MAX = 50;
 export const SP_REGEN = 1;
-export const GAME_MODES: Record<GameModeId, GameModeDefinition> = {
-  standard: { id: 'standard', name: '기본 모드', initialSp: SP_START, spRegen: SP_REGEN, killSpRewards: true },
-  'limited-sp': { id: 'limited-sp', name: '자동획득 금지 모드', initialSp: 20, spRegen: 0, killSpRewards: true },
-  'no-kill-sp': { id: 'no-kill-sp', name: '처치획득 금지 모드', initialSp: 20, spRegen: SP_REGEN, killSpRewards: false },
-};
+export const GAME_MODES = {
+  standard: { id: 'standard' as const, name: '기본 모드', rules: makeModeRules(SP_START, SP_REGEN, true) },
+  'limited-sp': { id: 'limited-sp' as const, name: '자동획득 금지 모드', rules: makeModeRules(20, 0, true) },
+  'no-kill-sp': { id: 'no-kill-sp' as const, name: '처치획득 금지 모드', rules: makeModeRules(20, SP_REGEN, false) },
+} satisfies Record<string, GameModeDefinition>;
+export function resolveModeRules(mode: GameModeId, overrides?: ModeRulesOverride): ModeRules {
+  return mergeModeRules(GAME_MODES[mode].rules, overrides);
+}
 export const MATCH_DURATION = 300;
 export const DECK_DURATION = 30;
 export const DECK_SIZE = 5;

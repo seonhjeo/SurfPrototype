@@ -1,4 +1,5 @@
-import type { BattleState } from './simulation.ts';
+import type { BattleState, UnitEntity } from './simulation.ts';
+import { getLaneRoutes, pointOnLane } from './lanes.ts';
 
 export const NETWORK_RENDER_DELAY = 150;
 const MAX_SNAPSHOTS = 32;
@@ -39,6 +40,7 @@ export class BattleSnapshotInterpolator {
     const to = this.snapshots[1] ?? from;
     const fraction = to.receivedAt > from.receivedAt
       ? Math.max(0, Math.min(1, (target - from.receivedAt) / (to.receivedAt - from.receivedAt))) : 0;
+    const routes = latest.rules?.lanes.count ? getLaneRoutes(latest.rules.lanes.count) : [];
     const positions = <T extends MovingEntity>(key: 'units' | 'projectiles', entities: T[]): T[] => {
       const earlier = new Map(from.state[key].map((entity) => [entity.id, entity]));
       const later = new Map(to.state[key].map((entity) => [entity.id, entity]));
@@ -46,7 +48,15 @@ export class BattleSnapshotInterpolator {
       return entities.map((entity) => {
         const start = earlier.get(entity.id);
         const end = later.get(entity.id);
-        if (start && end) return { ...entity, x: mix(start.x, end.x, fraction), y: mix(start.y, end.y, fraction) };
+        if (start && end) {
+          if (key === 'units' && routes.length) {
+            const a = start as UnitEntity, b = end as UnitEntity;
+            if (a.lane !== null && a.lane === b.lane && !a.laneEntering && !b.laneEntering && routes[a.lane]) {
+              return { ...entity, ...pointOnLane(routes[a.lane], mix(a.laneProgress, b.laneProgress, fraction)) };
+            }
+          }
+          return { ...entity, x: mix(start.x, end.x, fraction), y: mix(start.y, end.y, fraction) };
+        }
         // New entities appear immediately at their first known location until the buffer catches up.
         if (!births) {
           births = new Map();
