@@ -52,7 +52,7 @@ HTTPS 앞단에서는 WebSocket 업그레이드를 `/ws`로 전달하도록 구�
 
 Vercel은 화면을 배포하고 Render의 단일 Node.js 24 프로세스가 기존 WebSocket 연결과 방·전투를 관리합니다. 서버가 입장·덱·준비·SP·소환·결과를 검증하며 각 참가자에게 자신의 덱만 전달합니다. 공개 화면은 [surf-prototype.vercel.app](https://surf-prototype.vercel.app/), 게임 서버는 `wss://surf-multiplayer.onrender.com/ws`입니다.
 
-1. 현재 Render 서비스는 대시보드에서 수동 구성했으며 `main`의 `5df7f3a`를 배포했습니다. Node.js 24.19.0·Free 단일 인스턴스·Singapore 지역을 사용합니다. 저장소의 `render.yaml`은 이전 작업 브랜치 `0.3.1-private-connection-fix`를 가리키므로 현재 서비스의 배포 브랜치와 다릅니다.
+1. 현재 Render 서비스는 대시보드에서 수동 구성했으며 `main`의 `9291655`를 배포했습니다. `Auto-Deploy=On Commit`으로 PR 병합 커밋을 자동 배포합니다. Node.js 24.19.0·Free 단일 인스턴스·Singapore 지역을 사용합니다. 저장소의 `render.yaml`은 이전 작업 브랜치 `0.3.1-private-connection-fix`를 가리키므로 현재 서비스의 배포 브랜치와 다릅니다.
 2. Build Command는 `npm ci && npm run build`, 실제 Start Command는 `npm run start`(`npm start`와 같은 스크립트), Health Check Path는 `/healthz`입니다. `server/start.mjs`는 Render가 제공한 `PORT`로 `0.0.0.0`에서 접속을 받습니다. [Render Web Service 설정](https://render.com/docs/web-services)을 참고하세요.
 3. 현재 Render의 `MULTIPLAYER_ALLOWED_ORIGINS`는 `https://surf-prototype.vercel.app`만 허용합니다. Preview에서 같은 서버를 테스트하려면 해당 출처를 정확히 추가해야 합니다.
 4. [서버 상태 확인](https://surf-multiplayer.onrender.com/healthz)은 HTTP 200과 `{"status":"ok","service":"surf-multiplayer"}`를 반환합니다. 이 경로는 방 상태나 인증 정보를 노출하지 않습니다.
@@ -63,7 +63,9 @@ Vercel은 화면을 배포하고 Render의 단일 Node.js 24 프로세스가 기
 
 Render Free는 HTTP 요청이나 기존 WebSocket의 수신 메시지가 15분 동안 없으면 절전하고, 다음 요청이나 새 연결에서 기동하는 데 약 1분이 걸릴 수 있습니다. [Render Free의 절전 제한](https://render.com/docs/free#spinning-down-on-idle)을 참고하세요. 클라이언트는 최초 연결 전 `/healthz`를 확인하며 최대 120초 동안 기동을 기다립니다. 개별 요청 제한은 10초, 재시도 간격은 2초이며 경기 재접속은 추가하지 않습니다.
 
-PVP 화면은 서버 상태 사이의 좌표를 150ms 동안 보간합니다. 전투 판정·SP·소환·승패는 서버 상태를 따르고 AI 대전의 계산은 유지합니다. 2026-09-30 Node.js 24의 자동 테스트 59개와 타입 검사·프로덕션 빌드가 통과했습니다. Render와 Vercel은 `main`의 `5df7f3a` 배포가 각각 Live·Ready 상태이며, 세 모드의 공개 WebSocket 방 생성·참가·덱 비공개·전투·소환·이탈을 검증했습니다. 실제 공개 브라우저 두 탭에서도 전투·결과·재대전·상대 나가기 후 승리 화면을 확인했습니다. 서로 다른 기기·네트워크에서는 아직 검증하지 않았습니다. 배포 ID와 상세 흐름은 [공개 PVP 검증 기록](Docs/개발문서/공개PVP배포.md)에 남겼습니다.
+PVP 화면은 서버 상태 사이의 좌표를 150ms 동안 보간합니다. 전투 판정·SP·소환·승패는 서버 상태를 따르고 AI 대전의 계산은 유지합니다. 최초 공개 PVP 배포에서는 2026-09-30 Node.js 24의 자동 테스트 59개와 타입 검사·프로덕션 빌드가 통과했습니다. 당시 Render와 Vercel의 `main`·`5df7f3a` 배포가 각각 Live·Ready 상태였으며, 세 모드의 공개 WebSocket 방 생성·참가·덱 비공개·전투·소환·이탈을 검증했습니다. 실제 공개 브라우저 두 탭에서도 전투·결과·재대전·상대 나가기 후 승리 화면을 확인했습니다. 서로 다른 기기·네트워크에서는 아직 검증하지 않았습니다. 배포 ID와 상세 흐름은 [공개 PVP 검증 기록](Docs/개발문서/공개PVP배포.md)에 남겼습니다.
+
+모드 설정 리팩터링 후에는 자동 테스트 95/95개·타입 검사·프로덕션 빌드를 통과했고 사용자가 로컬 테스트 완료 후 병합·배포를 요청했습니다. [PR #8](https://github.com/seonhjeo/SurfPrototype/pull/8)의 `main`·`9291655`를 Vercel Production과 Render에 같은 커밋으로 배포했습니다. 세 모드의 공개 WebSocket 규칙 공유·덱 비공개·양쪽 소환·이탈 결과와 실제 Production 브라우저 두 탭의 대전·이탈 승리·콘솔 오류 0을 확인했습니다. 현재 세 모드의 새 기능 OFF·라인 0을 유지합니다. 상세 배포 ID와 확인 범위는 [최신 Production 검증](Docs/개발문서/공개PVP배포.md#모드-설정-리팩터링-production-검증--2026-09-30)에 기록했습니다.
 
 ## 모드 설정으로 기능 조합하기
 
