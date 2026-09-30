@@ -171,7 +171,7 @@ export const UNITS: Record<UnitId, UnitDefinition> = {
     skillDescription: '8초마다 사거리 안의 가장 가까운 적 한 명을 2초간 기절. 스킬 추가 피해 없음.',
   },
   hunter: {
-    id: 'hunter', name: '사냥꾼', icon: '⌖', cost: 3, hp: 80, attack: 5,
+    id: 'hunter', name: '사냥꾼', icon: '⌖', cost: 3, hp: 60, attack: 5,
     detection: 3, range: 1, speed: 1.2, attackInterval: 1, reward: 1,
     skillCooldown: 6, role: '저비용 중립 몬스터 사냥', attackKind: 'melee',
     skillDescription: '6초마다 단일 대상에게 15 피해. 기본 공격·스킬 모두 중립 몬스터와 보스에 2배 피해.',
