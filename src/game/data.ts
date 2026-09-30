@@ -81,8 +81,6 @@ export const SP_MAX = 50;
 export const SP_REGEN = 1;
 export const GAME_MODES = {
   standard: { id: 'standard' as const, name: '기본 모드', rules: makeModeRules(SP_START, SP_REGEN, true) },
-  'limited-sp': { id: 'limited-sp' as const, name: '자동획득 금지 모드', rules: makeModeRules(20, 0, true) },
-  'no-kill-sp': { id: 'no-kill-sp' as const, name: '처치획득 금지 모드', rules: makeModeRules(20, SP_REGEN, false) },
 } satisfies Record<string, GameModeDefinition>;
 export function resolveModeRules(mode: GameModeId, overrides?: ModeRulesOverride): ModeRules {
   return mergeModeRules(GAME_MODES[mode].rules, overrides);

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Simulation, FIXED_STEP } from '../src/game/simulation.ts';
 import type { UnitEntity } from '../src/game/simulation.ts';
-import { GAME_MODES, MAPS, UNITS, resolveModeRules } from '../src/game/data.ts';
+import { GAME_MODES, MAPS, UNITS, FORT_RADIUS, resolveModeRules } from '../src/game/data.ts';
 import type { GameModeId, MapId, ModeRulesOverride, Side, UnitId, WeatherId } from '../src/game/data.ts';
 import { getLaneRoutes, nearestLane, pointOnLane, projectToLane } from '../src/game/lanes.ts';
 
@@ -26,7 +26,8 @@ function place(sim: Simulation, unit: UnitEntity, lane: number, progress: number
   unit.facingX = (next.x - unit.x) / length; unit.facingY = (next.y - unit.y) / length;
 }
 
-test('all registered modes preserve their economy and opt out of every new feature by default', () => {
+test('the sole standard mode preserves the default economy and feature settings', () => {
+  assert.deepEqual(Object.keys(GAME_MODES), ['standard']);
   for (const [id, mode] of Object.entries(GAME_MODES)) {
     const rules = resolveModeRules(id as GameModeId);
     assert.equal(rules.lanes.count, 0);
@@ -34,16 +35,17 @@ test('all registered modes preserve their economy and opt out of every new featu
     assert.equal(rules.fortAttacks.catapult.enabled, false); assert.equal(rules.fortAttacks.oil.enabled, false);
     const sim = new Simulation({ map: 'desert', weather: 'sunny', gameMode: id as GameModeId, decks: { player: deck, enemy: deck } });
     assert.deepEqual(sim.state.rules, mode.rules);
-    assert.equal(sim.state.sp.player, id === 'standard' ? 5 : 20);
-    assert.equal(rules.sp.passive.enabled, id !== 'limited-sp');
-    assert.equal(rules.sp.summoned.enabled, id !== 'no-kill-sp');
-    assert.equal(rules.sp.neutral.enabled, id !== 'no-kill-sp');
+    assert.equal(sim.state.sp.player, 5);
+    assert.equal(rules.neutralWaves.count, null);
+    assert.equal(rules.sp.passive.enabled, true);
+    assert.equal(rules.sp.summoned.enabled, true);
+    assert.equal(rules.sp.neutral.enabled, true);
     assert.equal(sim.state.structures.length, 0);
   }
 });
 
 test('nested rules merge, snapshots are isolated, and invalid geometry/economy are rejected', () => {
-  const sim = create({ lanes: { count: 2 }, towers: { enabled: true }, sp: { initial: 17, maximum: 22, passive: { enabled: true, amount: 2.5 } } });
+  const sim = create({ lanes: { count: 2 }, towers: { enabled: true, laneCount: 2 }, sp: { initial: 17, maximum: 22, passive: { enabled: true, amount: 2.5 } } });
   assert.equal(sim.state.rules.towers.damage, 12); assert.equal(sim.state.sp.player, 17);
   sim.update(2); near(sim.state.sp.player, 22);
   const snapshot = sim.snapshot(); snapshot.rules.sp.maximum = 1;
@@ -53,6 +55,47 @@ test('nested rules merge, snapshots are isolated, and invalid geometry/economy a
   assert.throws(() => create({ towers: { interval: 0 } }));
   assert.throws(() => create({ minions: { eliteEvery: 0 } }));
   assert.throws(() => create({ spBox: { radius: 4 } }));
+  for (const count of [0, 1.5, 11]) {
+    assert.throws(() => create({ neutralWaves: { count } }));
+    assert.throws(() => create({ minions: { perLane: count } }));
+  }
+  for (const count of [0, 1.5, 4]) {
+    assert.throws(() => create({ towers: { count } }));
+    assert.throws(() => create({ towers: { laneCount: count } }));
+    assert.throws(() => create({ spBox: { count } }));
+  }
+});
+
+test('neutral counts override every map per spawn point and destination side, while null preserves map defaults', () => {
+  for (const map of Object.keys(MAPS) as MapId[]) for (const count of [null, 1, 10]) {
+    const sim = create({ neutralWaves: { enabled: true, count } }, map);
+    sim.update(5);
+    const expected = count ?? MAPS[map].monstersPerSpawnPoint;
+    assert.equal(sim.state.units.length, expected * 4);
+    for (const side of ['player', 'enemy']) assert.equal(sim.state.units.filter((unit) => unit.targetSide === side).length, expected * 2);
+    for (const unit of sim.state.units) near(unit.maxHp, MAPS[map].monster.hp);
+  }
+  const disabled = create({ neutralWaves: { enabled: false, count: 10 } });
+  disabled.update(85);
+  assert.equal(disabled.state.units.length, 0);
+  assert.equal(disabled.state.warnings.length, 0);
+});
+
+test('minion quantities preserve stats and add one elite per side and movement lane on the fifth wave', () => {
+  for (const lanes of [0, 1, 2, 3] as const) for (const perLane of [1, 10]) {
+    const sim = create({ lanes: { count: lanes }, minions: { enabled: true, perLane } });
+    sim.update(5);
+    const groups = Math.max(1, lanes) * 2;
+    assert.equal(sim.state.units.length, groups * perLane);
+    for (const unit of sim.state.units) near(unit.maxHp, MAPS.road.monster.hp * 1.5);
+    sim.state.units = [];
+    sim.state.wave = 4;
+    sim.state.time = 85 - FIXED_STEP;
+    sim.update(FIXED_STEP);
+    assert.equal(sim.state.units.filter((unit) => !unit.elite).length, groups * perLane);
+    assert.equal(sim.state.units.filter((unit) => unit.elite).length, groups);
+    for (const elite of sim.state.units.filter((unit) => unit.elite)) near(elite.maxHp, MAPS.road.boss.hp * 1.5);
+  }
 });
 
 test('routes have shared fort approaches, deterministic nearest projections and continuous progression', () => {
@@ -173,7 +216,7 @@ test('stealth, charge and knockback follow route arc length through corners', ()
 
 test('towers spawn symmetrically per lane, forbid overlapping summons, and preserve fort access before destruction', () => {
   for (const count of [0, 1, 2, 3] as const) {
-    const sim = create({ lanes: { count }, towers: { enabled: true } });
+    const sim = create({ lanes: { count }, towers: { enabled: true, laneCount: Math.max(1, count) } });
     assert.equal(sim.state.structures.length, Math.max(1, count) * 2);
     const own = sim.state.structures.find((structure) => structure.side === 'player')!;
     const before = sim.state.sp.player;
@@ -185,6 +228,42 @@ test('towers spawn symmetrically per lane, forbid overlapping summons, and prese
     sim.update(FIXED_STEP); assert.ok(sim.state.forts.enemy.hp < hp);
     assert.ok(sim.state.structures.filter((structure) => structure.side === 'enemy').every((structure) => structure.hp > 0));
   }
+});
+
+test('tower layout and quantities are independent of movement lanes, symmetric and clear of structures and forts', () => {
+  for (const movement of [0, 1, 2, 3] as const) for (const laneCount of [1, 2, 3]) for (const count of [1, 2, 3]) for (const boxes of [1, 2, 3]) {
+    const sim = create({ lanes: { count: movement }, towers: { enabled: true, laneCount, count }, spBox: { enabled: true, count: boxes } });
+    const towers = sim.state.structures.filter((entity) => entity.kind === 'tower');
+    assert.equal(towers.length, 2 * laneCount * count);
+    assert.ok(towers.every((entity) => entity.lane === null), 'tower layout IDs never restrict movement-lane combat');
+    const friendly = towers.filter((entity) => entity.side === 'player');
+    const enemy = towers.filter((entity) => entity.side === 'enemy');
+    for (let index = 0; index < friendly.length; index++) {
+      near(friendly[index].x, enemy[index].x); near(friendly[index].y + enemy[index].y, 20);
+      assert.equal(friendly[index].hp, 250);
+    }
+    if (count === 1) for (const [index, route] of getLaneRoutes(laneCount).entries()) {
+      const legacy = pointOnLane(route, route.length * sim.state.rules.towers.progress);
+      near(friendly[index].x, legacy.x); near(friendly[index].y, legacy.y);
+    }
+    for (const [index, structure] of sim.state.structures.entries()) {
+      for (const other of sim.state.structures.slice(index + 1)) {
+        assert.ok(Math.hypot(structure.x - other.x, structure.y - other.y) >= structure.radius + other.radius);
+      }
+      for (const fort of Object.values(sim.state.forts)) assert.ok(Math.hypot(structure.x - fort.x, structure.y - fort.y) >= structure.radius + FORT_RADIUS);
+    }
+    const baseline = create({ lanes: { count: 0 }, towers: { enabled: true, laneCount, count }, spBox: { enabled: true, count: boxes } });
+    assert.deepEqual(sim.state.structures, baseline.state.structures, 'changing only movement lanes leaves the tower layout intact');
+  }
+});
+
+test('towers select nearby enemy units across movement lanes', () => {
+  const sim = create({ lanes: { count: 3 }, towers: { enabled: true, laneCount: 1 } });
+  const route = getLaneRoutes(3)[2];
+  const victim = spawn(sim, 'enemy', 'shield', 2, route.cumulative[2]);
+  sim.update(1);
+  assert.ok(victim.hp < victim.maxHp);
+  assert.ok(sim.state.structures.some((tower) => tower.side === 'player' && tower.attackReadyAt > 0));
 });
 
 test('catapult and oil can independently damage enemies and reward neutral kills to the owning player', () => {
@@ -217,6 +296,31 @@ test('SP box grants fractional actual damage rewards, excludes excess damage and
   noRespawn.update(FIXED_STEP); assert.equal(noRespawn.state.structures[0].hp, 25, 'hunter deals base five, not neutral ten');
   noRespawn.state.structures[0].hp = 1; second.attackReadyAt = 0; noRespawn.update(FIXED_STEP);
   noRespawn.state.units = []; noRespawn.update(5); assert.equal(noRespawn.state.structures.length, 0);
+});
+
+test('one to three boxes use symmetric center positions and independently preserve respawn positions and timers', () => {
+  for (const count of [1, 2, 3]) {
+    const sim = create({ spBox: { enabled: true, count } });
+    const expected = count === 1 ? [6] : count === 2 ? [4, 8] : [2, 6, 10];
+    assert.deepEqual(sim.state.structures.map((box) => box.x), expected);
+    assert.ok(sim.state.structures.every((box) => box.y === 10 && box.hp === 200));
+  }
+  const sim = create({ spBox: { enabled: true, count: 3, hp: 1, respawnDelay: 1 } });
+  const hunter = spawn(sim, 'player', 'hunter');
+  hunter.x = 2; hunter.y = 11; hunter.attackReadyAt = 0;
+  sim.update(FIXED_STEP);
+  assert.deepEqual(sim.state.structures.map((box) => box.x), [6, 10]);
+  hunter.attackReadyAt = 1e6;
+  sim.update(0.4);
+  hunter.x = 6; hunter.y = 11; hunter.target = null; hunter.attackReadyAt = 0;
+  sim.update(FIXED_STEP);
+  assert.deepEqual(sim.state.structures.map((box) => box.x), [10]);
+  sim.state.units = [];
+  sim.update(0.6);
+  assert.deepEqual(sim.state.structures.map((box) => box.x).sort((a, b) => a - b), [2, 10]);
+  sim.update(0.4);
+  assert.deepEqual(sim.state.structures.map((box) => box.x).sort((a, b) => a - b), [2, 6, 10]);
+  assert.ok(sim.state.structures.every((box) => box.y === 10 && box.hp === 1));
 });
 
 test('only summoned units target and damage the common box, with access from all three lanes', () => {

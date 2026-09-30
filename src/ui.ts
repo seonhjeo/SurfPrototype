@@ -1,12 +1,14 @@
 import Phaser from 'phaser';
 import { BattleScene, GAME_SIZE } from './game/BattleScene';
-import { completeDeck, DECK_DURATION, DECK_SIZE, FORT_RADIUS, GAME_MODES, MAPS, MATCH_DURATION, PLAYER_RADIUS, randomEnvironment, resolveModeRules, UNIT_IDS, UNITS, WEATHER } from './game/data';
+import { completeDeck, DECK_DURATION, DECK_SIZE, FORT_RADIUS, MAPS, MATCH_DURATION, PLAYER_RADIUS, randomEnvironment, UNIT_IDS, UNITS, WEATHER } from './game/data';
 import type { Environment, GameModeId, ModeRules, Side, UnitId } from './game/data';
 import { Simulation } from './game/simulation';
 import type { BattleState } from './game/simulation';
 import { BattleSnapshotInterpolator } from './game/battle-presentation';
 import { RoomConnection } from './network';
-import { featureRules, killSpRule, spRecovery, spRules, summonInstruction } from './game/mode-description';
+import { featureRules, killSpRule, neutralRule, spRecovery, spRules, summonInstruction } from './game/mode-description';
+import { createMatchSettings, resolveMatchSettings } from './game/match-settings';
+import { openMatchRulesDialog, openMatchSettingsDialog } from './match-settings-dialog';
 import type { RoomMessage, RoomStateMessage } from './network';
 
 type Phase = 'lobby' | 'waiting' | 'battle' | 'result';
@@ -34,6 +36,9 @@ export class SurfApp {
   private phase: Phase = 'lobby';
   private mode: 'ai' | 'room' = 'ai';
   private gameMode: GameModeId = 'standard';
+  private matchSettings = createMatchSettings();
+  private matchRules = resolveMatchSettings(this.matchSettings);
+  private closeSettings: (() => void) | null = null;
   private environment: Environment = randomEnvironment();
   private deck: UnitId[] = [];
   private detail: UnitId = 'warrior';
@@ -85,6 +90,7 @@ export class SurfApp {
     element.addEventListener(type, listener, { signal: this.screenEvents.signal });
   }
   private clearScreen() {
+    this.closeSettings?.(); this.closeSettings = null;
     this.screenEvents.abort(); this.screenEvents = new AbortController();
     this.drag = null; this.scene?.setPreview(null, false); this.destroyGame();
     document.querySelector('#toast')?.classList.remove('visible');
@@ -102,7 +108,7 @@ export class SurfApp {
   }
 
   private get rules(): ModeRules {
-    return this.state?.rules ?? (this.mode === 'room' ? this.room?.rules : undefined) ?? resolveModeRules(this.gameMode);
+    return this.state?.rules ?? (this.mode === 'room' ? this.room?.rules : undefined) ?? this.matchRules;
   }
 
   private renderLobby() {
@@ -112,27 +118,17 @@ export class SurfApp {
       <div class="lobby-intro"><p class="eyebrow">A LITTLE STRATEGY. A BIG BATTLE.</p><h1 id="lobby-title">작은 선택,<br><span>큰 전투.</span></h1><p class="intro-copy">나만의 다섯 유닛으로<br>상대의 성채를 공략하세요.</p></div>
       <div class="hero-art">${crest}<span class="art-label">BUILD YOUR DECK · DEFEND YOUR FORT</span></div>
       <div class="mode-card"><span class="mode-icon" aria-hidden="true">♜</span><div><span class="eyebrow">GAME MODE</span><h2>성채 공방전</h2><p>1대1 전략 대전 · 최대 5분</p></div></div>
-      <div class="mode-options" role="group" aria-label="게임 모드 선택">${Object.values(GAME_MODES).map((mode) => `<button class="mode-option${mode.id === this.gameMode ? ' selected' : ''}" type="button" data-game-mode="${mode.id}" aria-pressed="${mode.id === this.gameMode}"><strong>${mode.name}</strong><small>${spRules(mode.rules)}</small></button>`).join('')}</div>
       <button class="button primary ai-button" type="button" data-action="ai"><span>AI와 대전</span><span aria-hidden="true">↗</span></button>
       <div class="private-heading"><span>친구와 함께 플레이</span><span class="hairline"></span></div>
       <button class="button secondary create-button" type="button" data-action="create">비공개 방 만들기 <span aria-hidden="true">＋</span></button>
       <form class="join-form"><label class="sr-only" for="room-code">6자리 초대 코드</label><input id="room-code" name="code" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="6자리 초대 코드" autocomplete="off" required aria-describedby="join-help"><button class="button join-button" type="submit">참가 <span aria-hidden="true">→</span></button></form>
-      <p class="muted tiny" id="join-help">초대 코드로 참가하면 방장이 선택한 모드로 플레이합니다.</p><p class="lobby-footnote"><span class="status-dot"></span>PROTOTYPE 001 <span>아이디어를 플레이로.</span></p>
+      <p class="muted tiny" id="join-help">초대 코드로 참가하면 방장의 경기 설정으로 플레이합니다.</p><p class="lobby-footnote"><span class="status-dot"></span>PROTOTYPE 001 <span>아이디어를 플레이로.</span></p>
     </section>`;
     this.listen('click', (event) => {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button');
       if (!button || this.pending) return;
-      if (button.dataset.gameMode) {
-        this.gameMode = button.dataset.gameMode as GameModeId;
-        this.screen.querySelectorAll<HTMLButtonElement>('[data-game-mode]').forEach((option) => {
-          const selected = option.dataset.gameMode === this.gameMode;
-          option.classList.toggle('selected', selected); option.setAttribute('aria-pressed', String(selected));
-        });
-        this.status.textContent = `${GAME_MODES[this.gameMode].name} 선택. ${spRules(resolveModeRules(this.gameMode))}.`;
-        return;
-      }
-      if (button.dataset.action === 'ai') this.startAI();
-      else if (button.dataset.action === 'create') void this.connectRoom();
+      if (button.dataset.action === 'ai') this.configureMatch('ai');
+      else if (button.dataset.action === 'create') this.configureMatch('room');
     });
     this.listen('input', (event) => { const input = event.target as HTMLInputElement; if (input.id === 'room-code') input.value = input.value.replace(/\D/g, '').slice(0, 6); });
     this.listen('submit', (event) => {
@@ -140,6 +136,16 @@ export class SurfApp {
       const code = this.screen.querySelector<HTMLInputElement>('#room-code')!.value;
       if (!/^\d{6}$/.test(code)) { this.notice('초대 코드 여섯 자리를 입력하세요.'); return; }
       void this.connectRoom(code);
+    });
+  }
+
+  private configureMatch(destination: 'ai' | 'room') {
+    this.closeSettings?.();
+    this.closeSettings = openMatchSettingsDialog(this.matchSettings, destination, (settings) => {
+      this.closeSettings = null;
+      this.matchSettings = settings; this.matchRules = resolveMatchSettings(settings);
+      if (destination === 'ai') this.startAI();
+      else void this.connectRoom();
     });
   }
 
@@ -159,7 +165,7 @@ export class SurfApp {
     try {
       await connection.connect();
       if (token !== this.generation || this.destroyed) { connection.close(); return; }
-      connection.send(code ? { type: 'join', code } : { type: 'create', gameMode: this.gameMode });
+      connection.send(code ? { type: 'join', code } : { type: 'create', settings: this.matchSettings });
     } catch (error) {
       if (token !== this.generation || this.destroyed) return;
       this.connection = null; connection.close(); this.renderLobby();
@@ -191,9 +197,9 @@ export class SurfApp {
   private renderWaiting() {
     this.clearScreen(); this.phase = 'waiting'; this.status.textContent = '유닛을 선택하고 준비를 완료하세요.';
     this.screen.innerHTML = `<section class="waiting screen-content" aria-labelledby="deck-title">
-      <div class="screen-heading"><button class="text-button" data-action="leave" type="button" aria-label="대기방을 나가 로비로 돌아가기">← 로비</button><span class="eyebrow">${GAME_MODES[this.gameMode].name}</span></div>
-      <div class="deck-title-row"><div><h1 id="deck-title">전투를 준비하세요</h1><p>${spRules(this.rules)}${featureRules(this.rules) ? `<br>${featureRules(this.rules)}` : ''}</p></div><div class="timer-pill"><span id="deck-timer">30</span><small>초</small></div></div>
-      <div class="environment-card"><span class="environment-symbol" aria-hidden="true">${WEATHER[this.environment.weather].icon}</span><div><strong>${MAPS[this.environment.map].name} <span>· ${WEATHER[this.environment.weather].name}</span></strong><p class="map-gimmick">${MAPS[this.environment.map].gimmickDescription}</p><p>${WEATHER[this.environment.weather].description}</p></div></div>
+      <div class="screen-heading"><button class="text-button" data-action="leave" type="button" aria-label="대기방을 나가 로비로 돌아가기">← 로비</button><button class="text-button settings-link" data-action="settings" type="button">경기 설정 확인 ⚙</button></div>
+      <div class="deck-title-row"><div><h1 id="deck-title">전투를 준비하세요</h1><p>${spRules(this.rules)}</p></div><div class="timer-pill"><span id="deck-timer">30</span><small>초</small></div></div>
+      <div class="environment-card"><span class="environment-symbol" aria-hidden="true">${WEATHER[this.environment.weather].icon}</span><div><strong>${MAPS[this.environment.map].name} <span>· ${WEATHER[this.environment.weather].name}</span></strong><p class="map-gimmick">${neutralRule(this.rules, this.environment.map)}</p><p>${WEATHER[this.environment.weather].description}</p></div></div>
       ${this.mode === 'room' ? `<div class="invite-row"><span>초대 코드</span><button class="code-button" data-action="copy" type="button" aria-label="초대 코드 복사">${escape(this.room!.code)} <small>복사</small></button></div>` : ''}
       <div class="selection-label"><strong>나의 덱 <span id="deck-count">0 / 5</span></strong><span>상대 덱은 비공개</span></div><div class="deck-slots" id="deck-slots" aria-label="선택한 다섯 유닛"></div>
       <div class="catalog-heading"><span>유닛 선택 <small>↕ 스크롤</small></span><span>선택한 유닛을 누르면 제외</span></div>
@@ -207,6 +213,7 @@ export class SurfApp {
       const target = (event.target as HTMLElement).closest<HTMLButtonElement>('button'); if (!target) return;
       const unit = target.dataset.unit as UnitId | undefined; if (unit) { this.toggleUnit(unit); return; }
       if (target.dataset.action === 'leave') this.returnLobby();
+      else if (target.dataset.action === 'settings') { this.closeSettings?.(); this.closeSettings = openMatchRulesDialog(this.rules); }
       else if (target.dataset.action === 'ready') this.toggleReady();
       else if (target.dataset.action === 'copy' && this.room) {
         if (navigator.clipboard) void navigator.clipboard.writeText(this.room.code).then(() => this.notice('초대 코드를 복사했습니다. 친구에게 알려주세요.')).catch(() => this.notice(`초대 코드: ${this.room?.code ?? ''}`));
@@ -260,15 +267,15 @@ export class SurfApp {
 
   private startLocalBattle() {
     this.deck = completeDeck(this.deck);
-    this.simulation = new Simulation({ ...this.environment, gameMode: this.gameMode, decks: { player: this.deck, enemy: completeDeck(['warrior', 'archer', 'hunter']) }, aiSides: ['enemy'], seed: Date.now() });
+    this.simulation = new Simulation({ ...this.environment, gameMode: this.gameMode, rules: this.matchRules, decks: { player: this.deck, enemy: completeDeck(['warrior', 'archer', 'hunter']) }, aiSides: ['enemy'], seed: Date.now() });
     this.state = this.simulation.state; this.accumulator = 0; this.previous = 0; this.renderBattle();
   }
   private renderBattle() {
     this.clearScreen(); this.phase = 'battle'; const map = MAPS[this.environment.map]; const weather = WEATHER[this.environment.weather];
     this.status.textContent = '전투 시작. 카드를 누르거나 전장 아래쪽으로 드래그해 소환하세요.';
-    this.screen.innerHTML = `<section class="battle screen-content" aria-label="성채 공방전 ${GAME_MODES[this.gameMode].name}">
+    this.screen.innerHTML = `<section class="battle screen-content" aria-label="성채 공방전">
       <div class="battle-heading"><div><span class="live-dot"></span><strong>${map.name}</strong><span>${weather.icon} ${weather.name}</span></div><strong class="match-timer" id="match-timer">05:00</strong><button class="text-button exit-button" data-action="leave" type="button" title="전투에서 나가면 패배합니다">나가기</button></div>
-      <p class="battle-map-gimmick">${GAME_MODES[this.gameMode].name} · ${killSpRule(this.rules)} · ${featureRules(this.rules) ? `${featureRules(this.rules)} · ` : ''}${map.gimmickDescription}</p>
+      <p class="battle-map-gimmick">${killSpRule(this.rules)} · ${featureRules(this.rules)} · ${neutralRule(this.rules, this.environment.map)}</p>
       <div class="fort-hud"><div class="fort-tile own"><div><span>♜ 나의 성채</span><strong id="own-hp">1,000</strong></div><div class="hp-track"><span id="own-hp-bar"></span></div></div><span class="versus">VS</span><div class="fort-tile enemy"><div><span>상대 성채 ♜</span><strong id="enemy-hp">1,000</strong></div><div class="hp-track"><span id="enemy-hp-bar"></span></div></div></div>
       <div class="battle-arena"><div id="game" role="img" aria-label="자동 전투 전장. 내 유닛은 아래에서 위로 전진합니다."></div><div class="wave-pill" id="wave-info">첫 웨이브 준비 중</div><div class="boss-alert" id="boss-alert" role="status"></div></div>
       <div class="battle-footer"><div class="resource-row"><div class="sp-label"><span class="sp-gem" aria-hidden="true">◆</span><strong id="sp-value">${Math.min(this.rules.sp.initial, this.rules.sp.maximum)}</strong><span id="sp-maximum">/ ${this.rules.sp.maximum} SP</span></div><div class="sp-track"><span id="sp-bar"></span></div><span class="regen-label" id="sp-recovery">${spRecovery(this.rules)}</span></div><div class="battle-hand">${this.deck.map((id) => `<button class="battle-card" type="button" data-summon="${id}" aria-label="${UNITS[id].name} 소환, ${UNITS[id].cost} SP"><span class="battle-card-cost">${UNITS[id].cost}</span><span class="battle-card-icon" aria-hidden="true">${UNITS[id].icon}</span><strong>${UNITS[id].name}</strong></button>`).join('')}</div><p class="battle-instruction" id="battle-instruction">${summonInstruction(this.rules)}</p></div>
@@ -350,7 +357,7 @@ export class SurfApp {
     const own = this.state.forts[this.side]; const opponent = this.state.forts[other(this.side)];
     const reason = resultReason(result.reason);
     this.status.textContent = `${draw ? '무승부' : won ? '승리' : '패배'}. ${reason}`;
-    this.screen.innerHTML = `<section class="result screen-content ${won ? 'win' : draw ? 'draw' : 'loss'}" aria-labelledby="result-title"><p class="eyebrow">${GAME_MODES[this.gameMode].name} · BATTLE COMPLETE</p><div class="result-emblem" aria-hidden="true">${won ? '♜' : draw ? '⚔' : '⚑'}</div><span class="result-label">${draw ? 'DRAW' : won ? 'VICTORY' : 'DEFEAT'}</span><h1 id="result-title">${title}</h1><p class="result-subtitle">${subtitle}</p>
+    this.screen.innerHTML = `<section class="result screen-content ${won ? 'win' : draw ? 'draw' : 'loss'}" aria-labelledby="result-title"><p class="eyebrow">성채 공방전 · BATTLE COMPLETE</p><div class="result-emblem" aria-hidden="true">${won ? '♜' : draw ? '⚔' : '⚑'}</div><span class="result-label">${draw ? 'DRAW' : won ? 'VICTORY' : 'DEFEAT'}</span><h1 id="result-title">${title}</h1><p class="result-subtitle">${subtitle}</p>
       <div class="result-score"><div><span>나의 성채</span><strong>${Math.ceil(Math.max(0, own.hp)).toLocaleString('ko-KR')}</strong><small>남은 체력</small></div><span class="versus">VS</span><div><span>상대 성채</span><strong>${Math.ceil(Math.max(0, opponent.hp)).toLocaleString('ko-KR')}</strong><small>남은 체력</small></div></div>
       <div class="result-meta"><span>${MAPS[this.environment.map].name} · ${WEATHER[this.environment.weather].name}</span><span>${clock(this.state.time)} 플레이</span></div><p class="result-reason">${escape(reason)}</p><div class="result-deck">${this.deck.map((id) => `<span title="${UNITS[id].name}">${UNITS[id].icon}</span>`).join('')}</div>
       <div class="result-actions"><button class="button primary" type="button" id="rematch-button" data-action="rematch">다시 대전 <span aria-hidden="true">↻</span></button><button class="button secondary" type="button" data-action="leave">로비로 돌아가기 <span aria-hidden="true">→</span></button><p class="tiny muted" id="rematch-status">새로운 맵과 날씨에서 덱을 다시 선택합니다.</p></div></section>`;
@@ -398,6 +405,7 @@ export class SurfApp {
     this.raf = requestAnimationFrame(this.frame);
   };
   destroy() {
+    this.closeSettings?.(); this.closeSettings = null;
     this.destroyed = true; cancelAnimationFrame(this.raf); this.screenEvents.abort(); this.globalEvents.abort();
     if (this.toastTimer) clearTimeout(this.toastTimer); this.exitConnection(); this.destroyGame();
   }
