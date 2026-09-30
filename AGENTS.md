@@ -16,7 +16,7 @@
 | 분야 | 지침 문서 |
 | --- | --- |
 | 프로젝트 목적·기술 구성 | [Project.md](AgentDocs/Project.md) |
-| 구현·개발 문서 확인·검증 | [Development.md](AgentDocs/Development.md) |
+| 멀티 에이전트·구현·개발 문서 확인·검증 | [Development.md](AgentDocs/Development.md) |
 | Git·브랜치·사용자 로컬 테스트 | [GitAndTesting.md](AgentDocs/GitAndTesting.md) |
 | GitHub CI·Vercel 배포 | [Deployment.md](AgentDocs/Deployment.md) |
 | 기획·개발 문서·보고서 관리 | [Documentation.md](AgentDocs/Documentation.md) |
