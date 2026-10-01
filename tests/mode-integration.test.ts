@@ -32,6 +32,7 @@ function enabledRules(lanes: 0 | 1 | 2 | 3, economy: typeof economyPolicies[numb
     spBox: { enabled: true, count: 3, respawnDelay: 4 },
     sp: {
       initial: 50, maximum: 37, passive: { enabled: economy !== 'no-passive', amount: 1.25 },
+      towerLoss: { enabled: true, amount: 7 },
       summoned: { enabled: economy !== 'no-rewards', amount: 4.5, multiplier: 2 },
       minion: { enabled: economy !== 'no-rewards', amount: 1.5 },
       elite: { enabled: economy !== 'no-rewards', amount: 8 },

@@ -37,6 +37,7 @@ test('the sole standard mode preserves the default economy and feature settings'
     assert.deepEqual(sim.state.rules, mode.rules);
     assert.equal(sim.state.sp.player, 5);
     assert.equal(rules.neutralWaves.count, null);
+    assert.deepEqual(rules.sp.towerLoss, { enabled: false, amount: 5 });
     assert.equal(rules.sp.passive.enabled, true);
     assert.equal(rules.sp.summoned.enabled, true);
     assert.equal(rules.sp.neutral.enabled, true);
@@ -64,6 +65,7 @@ test('nested rules merge, snapshots are isolated, and invalid geometry/economy a
     assert.throws(() => create({ towers: { laneCount: count } }));
     assert.throws(() => create({ spBox: { count } }));
   }
+  for (const amount of [0, 1.5, 51]) assert.throws(() => create({ sp: { towerLoss: { amount } } }));
 });
 
 test('neutral counts override every map per spawn point and destination side, while null preserves map defaults', () => {
@@ -264,6 +266,76 @@ test('towers select nearby enemy units across movement lanes', () => {
   sim.update(1);
   assert.ok(victim.hp < victim.maxHp);
   assert.ok(sim.state.structures.some((tower) => tower.side === 'player' && tower.attackReadyAt > 0));
+});
+
+test('destroyed towers reward their owner once for summoned, minion or neutral attacks, respecting OFF and the SP cap', () => {
+  for (const owner of ['player', 'enemy'] as const) for (const kind of ['summoned', 'minion', 'neutral'] as const) for (const enabled of [false, true]) for (const initial of [10, 49, 50]) {
+    const sim = create({ towers: { enabled: true, hp: 1 }, sp: { passive: { enabled: false }, towerLoss: { enabled, amount: 7 } } });
+    for (const tower of sim.state.structures) tower.attackReadyAt = 1e6;
+    const tower = sim.state.structures.find((entity) => entity.side === owner)!;
+    const opponent = owner === 'player' ? 'enemy' : 'player';
+    for (let index = 0; index < 2; index++) {
+      const attacker = spawn(sim, opponent, 'hunter');
+      Object.assign(attacker, { x: tower.x, y: tower.y + (owner === 'player' ? -0.8 : 0.8), target: tower.id, attackReadyAt: 0, attack: 1000, kind });
+      if (kind === 'neutral') attacker.side = 'neutral';
+    }
+    sim.state.sp[owner] = initial; sim.state.sp[opponent] = 10;
+    sim.update(FIXED_STEP);
+    assert.equal(tower.hp, 0);
+    near(sim.state.sp[owner], enabled ? Math.min(50, initial + 7) : initial);
+    assert.equal(sim.state.sp[opponent], 10, 'the attacking side receives no tower loss reward');
+    assert.ok(!sim.state.structures.some((entity) => entity.id === tower.id));
+    sim.update(1);
+    near(sim.state.sp[owner], enabled ? Math.min(50, initial + 7) : initial, 1e-6);
+    near(sim.state.sp[opponent], 10);
+  }
+});
+
+test('simultaneous tower losses pay per tower and to each owner independently', () => {
+  const sim = create({ towers: { enabled: true, count: 2, hp: 1 }, sp: { passive: { enabled: false }, towerLoss: { enabled: true, amount: 5 } } });
+  for (const tower of sim.state.structures) {
+    tower.attackReadyAt = 1e6;
+    const opponent = tower.side === 'player' ? 'enemy' : 'player';
+    const attacker = spawn(sim, opponent, 'hunter');
+    Object.assign(attacker, { x: tower.x, y: tower.y + (tower.side === 'player' ? -0.8 : 0.8), target: tower.id, attackReadyAt: 0 });
+  }
+  sim.state.sp.player = 0; sim.state.sp.enemy = 0;
+  sim.update(FIXED_STEP);
+  assert.equal(sim.state.structures.length, 0);
+  assert.deepEqual(sim.state.sp, { player: 10, enemy: 10 });
+});
+
+test('burn and ice tower deaths pay their owner once, including overlapping persistent damage', () => {
+  for (const owner of ['player', 'enemy'] as const) for (const effect of ['burn', 'ice', 'both']) for (const amount of [1, 7, 50]) {
+    const sim = create({ towers: { enabled: true, hp: 1 }, sp: { passive: { enabled: false }, towerLoss: { enabled: true, amount } } });
+    const tower = sim.state.structures.find((entity) => entity.side === owner)!;
+    const opponent = owner === 'player' ? 'enemy' : 'player';
+    if (effect !== 'ice') tower.burn = { sourceSide: 'neutral', damage: 2, expiresAt: 2, nextTickAt: FIXED_STEP };
+    if (effect !== 'burn') sim.state.zones.push({ id: 1000, side: opponent, lane: null, x: tower.x, y: tower.y, radius: 2, expiresAt: 2, nextTickAt: FIXED_STEP });
+    sim.state.sp.player = 0; sim.state.sp.enemy = 0;
+    sim.update(FIXED_STEP);
+    assert.equal(tower.hp, 0);
+    assert.equal(sim.state.sp[owner], amount);
+    assert.equal(sim.state.sp[opponent], 0);
+    sim.update(2);
+    assert.equal(sim.state.sp[owner], amount);
+    assert.equal(sim.state.sp[opponent], 0);
+  }
+});
+
+test('box damage income and tower loss rewards remain independent', () => {
+  const sim = create({ towers: { enabled: true, hp: 1 }, spBox: { enabled: true, hp: 1 }, sp: { passive: { enabled: false }, towerLoss: { enabled: true, amount: 7 } } });
+  const box = sim.state.structures.find((entity) => entity.kind === 'sp-box')!;
+  const tower = sim.state.structures.find((entity) => entity.side === 'player')!;
+  const attacker = spawn(sim, 'player', 'hunter');
+  Object.assign(attacker, { x: box.x, y: box.y + 1, target: box.id, attackReadyAt: 0 });
+  sim.state.sp.player = 0; sim.state.sp.enemy = 0;
+  sim.update(FIXED_STEP);
+  near(sim.state.sp.player, 0.1);
+  tower.burn = { sourceSide: 'neutral', damage: 2, expiresAt: 2, nextTickAt: sim.state.time + FIXED_STEP };
+  sim.update(FIXED_STEP);
+  near(sim.state.sp.player, 7.1);
+  near(sim.state.sp.enemy, 0);
 });
 
 test('catapult and oil can independently damage enemies and reward neutral kills to the owning player', () => {

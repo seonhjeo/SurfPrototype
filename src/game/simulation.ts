@@ -584,6 +584,10 @@ export class Simulation {
       this.awardSp(source, actualDamage * this.state.rules.spBox.spPerDamage);
       if (entity.hp <= 0 && this.state.rules.spBox.respawnDelay !== null) this.boxRespawns.push({ at: this.state.time + this.state.rules.spBox.respawnDelay, position: { x: entity.x, y: entity.y } });
     }
+    if (entity.hp <= 0 && target.structure?.kind === 'tower' && target.structure.side !== 'neutral') {
+      const reward = this.state.rules.sp.towerLoss;
+      if (reward.enabled) this.awardSp(target.structure.side, reward.amount);
+    }
     if (entity.hp <= 0 && target.unit) {
       const victim = target.unit;
       const rewardSide = victim.side !== 'neutral' ? opposite(victim.side) : source !== 'neutral' ? source : null;

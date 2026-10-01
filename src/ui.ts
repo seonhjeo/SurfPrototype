@@ -7,7 +7,7 @@ import type { BattleState } from './game/simulation';
 import { BattleSnapshotInterpolator } from './game/battle-presentation';
 import { RoomConnection } from './network';
 import { featureRules, killSpRule, neutralRule, spRecovery, spRules, summonInstruction } from './game/mode-description';
-import { createMatchSettings, resolveMatchSettings } from './game/match-settings';
+import { createMatchSettings, resolveMatchEnvironment, resolveMatchSettings } from './game/match-settings';
 import { openMatchRulesDialog, openMatchSettingsDialog } from './match-settings-dialog';
 import type { RoomMessage, RoomStateMessage } from './network';
 
@@ -151,7 +151,7 @@ export class SurfApp {
 
   private startAI() {
     this.exitConnection(false);
-    this.mode = 'ai'; this.side = 'player'; this.environment = randomEnvironment();
+    this.mode = 'ai'; this.side = 'player'; this.environment = resolveMatchEnvironment(this.matchSettings.environment);
     this.deck = []; this.ready = false; this.opponentReady = false; this.room = null; this.state = null; this.simulation = null;
     this.waitingStarted = performance.now(); this.deadline = Date.now() + DECK_DURATION * 1000; this.renderWaiting();
   }
@@ -213,7 +213,10 @@ export class SurfApp {
       const target = (event.target as HTMLElement).closest<HTMLButtonElement>('button'); if (!target) return;
       const unit = target.dataset.unit as UnitId | undefined; if (unit) { this.toggleUnit(unit); return; }
       if (target.dataset.action === 'leave') this.returnLobby();
-      else if (target.dataset.action === 'settings') { this.closeSettings?.(); this.closeSettings = openMatchRulesDialog(this.rules); }
+      else if (target.dataset.action === 'settings') {
+        this.closeSettings?.();
+        this.closeSettings = openMatchRulesDialog(this.rules, this.environment, this.mode === 'room' ? this.room!.environmentSettings : this.matchSettings.environment);
+      }
       else if (target.dataset.action === 'ready') this.toggleReady();
       else if (target.dataset.action === 'copy' && this.room) {
         if (navigator.clipboard) void navigator.clipboard.writeText(this.room.code).then(() => this.notice('초대 코드를 복사했습니다. 친구에게 알려주세요.')).catch(() => this.notice(`초대 코드: ${this.room?.code ?? ''}`));
@@ -360,7 +363,7 @@ export class SurfApp {
     this.screen.innerHTML = `<section class="result screen-content ${won ? 'win' : draw ? 'draw' : 'loss'}" aria-labelledby="result-title"><p class="eyebrow">성채 공방전 · BATTLE COMPLETE</p><div class="result-emblem" aria-hidden="true">${won ? '♜' : draw ? '⚔' : '⚑'}</div><span class="result-label">${draw ? 'DRAW' : won ? 'VICTORY' : 'DEFEAT'}</span><h1 id="result-title">${title}</h1><p class="result-subtitle">${subtitle}</p>
       <div class="result-score"><div><span>나의 성채</span><strong>${Math.ceil(Math.max(0, own.hp)).toLocaleString('ko-KR')}</strong><small>남은 체력</small></div><span class="versus">VS</span><div><span>상대 성채</span><strong>${Math.ceil(Math.max(0, opponent.hp)).toLocaleString('ko-KR')}</strong><small>남은 체력</small></div></div>
       <div class="result-meta"><span>${MAPS[this.environment.map].name} · ${WEATHER[this.environment.weather].name}</span><span>${clock(this.state.time)} 플레이</span></div><p class="result-reason">${escape(reason)}</p><div class="result-deck">${this.deck.map((id) => `<span title="${UNITS[id].name}">${UNITS[id].icon}</span>`).join('')}</div>
-      <div class="result-actions"><button class="button primary" type="button" id="rematch-button" data-action="rematch">다시 대전 <span aria-hidden="true">↻</span></button><button class="button secondary" type="button" data-action="leave">로비로 돌아가기 <span aria-hidden="true">→</span></button><p class="tiny muted" id="rematch-status">새로운 맵과 날씨에서 덱을 다시 선택합니다.</p></div></section>`;
+      <div class="result-actions"><button class="button primary" type="button" id="rematch-button" data-action="rematch">다시 대전 <span aria-hidden="true">↻</span></button><button class="button secondary" type="button" data-action="leave">로비로 돌아가기 <span aria-hidden="true">→</span></button><p class="tiny muted" id="rematch-status">선택한 맵·날씨를 유지하고 무작위 항목만 다시 추첨합니다.</p></div></section>`;
     this.listen('click', (event) => {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-action]');
       if (button?.dataset.action === 'leave') this.returnLobby();

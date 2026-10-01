@@ -21,6 +21,7 @@ export function featureRules(rules: ModeRules): string {
   if (rules.fortAttacks.catapult.enabled) features.push('투석기');
   if (rules.fortAttacks.oil.enabled) features.push('끓는 기름');
   if (rules.towers.enabled) features.push(`포탑 ${rules.towers.laneCount}라인 × ${rules.towers.count}개`);
+  if (rules.towers.enabled && rules.sp.towerLoss.enabled) features.push(`내 포탑 파괴 시 +${rules.sp.towerLoss.amount} SP`);
   if (rules.spBox.enabled) features.push(`SP 상자 ${rules.spBox.count}개`);
   return features.join(' · ');
 }
@@ -34,10 +35,6 @@ export function neutralRule(rules: ModeRules, map: MapId): string {
 export function matchRuleDetails(rules: ModeRules): [string, string][] {
   const reward = (value: ModeRules['sp']['summoned']) => value.enabled ? (value.amount === null ? '개체별 기본 보상' : `${value.amount} SP / 처치`) : 'OFF';
   return [
-    ['시작 SP', `${rules.sp.initial} SP`], ['최대 보유 SP', `${rules.sp.maximum} SP`],
-    ['SP 자동 획득', spRecovery(rules)],
-    ['소환 유닛 처치 보상', reward(rules.sp.summoned)], ['일반 미니언 처치 보상', reward(rules.sp.minion)],
-    ['엘리트 미니언 처치 보상', reward(rules.sp.elite)], ['중립 몬스터 처치 보상', reward(rules.sp.neutral)],
     ['이동 라인', rules.lanes.count ? `${rules.lanes.count}개` : '0개 · 자유 이동'],
     ['중립 몬스터', rules.neutralWaves.enabled ? (rules.neutralWaves.count === null ? 'ON · 맵 기본 수량' : `${rules.neutralWaves.count}마리 / 지점·진영`) : 'OFF'],
     ['성채 미니언', rules.minions.enabled ? `${rules.minions.perLane}마리 / 진영·이동 라인${rules.lanes.count === 0 ? ' (중앙 1곳)' : ''}` : 'OFF'],
@@ -45,6 +42,11 @@ export function matchRuleDetails(rules: ModeRules): [string, string][] {
     ['포탑 배치 라인', rules.towers.enabled ? `${rules.towers.laneCount}개 · 이동 라인과 별개` : 'OFF'],
     ['라인당 포탑 수', rules.towers.enabled ? `${rules.towers.count}개 · 진영당 총 ${rules.towers.laneCount * rules.towers.count}개` : 'OFF'],
     ['SP 상자', rules.spBox.enabled ? `중앙 ${rules.spBox.count}개` : 'OFF'],
+    ['시작 SP', `${rules.sp.initial} SP`], ['최대 보유 SP', `${rules.sp.maximum} SP`],
+    ['SP 자동 획득', spRecovery(rules)],
+    ['소환 유닛 처치 보상', reward(rules.sp.summoned)], ['일반 미니언 처치 보상', reward(rules.sp.minion)],
+    ['엘리트 미니언 처치 보상', reward(rules.sp.elite)], ['중립 몬스터 처치 보상', reward(rules.sp.neutral)],
+    ['내 포탑 파괴 시 SP', rules.sp.towerLoss.enabled ? `소유 진영에 ${rules.sp.towerLoss.amount} SP / 개` : 'OFF'],
   ];
 }
 

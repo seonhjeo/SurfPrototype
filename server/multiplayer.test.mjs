@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { once } from 'node:events';
 import test from 'node:test';
 import { WebSocket } from 'ws';
-import { Simulation } from '../src/game/simulation.ts';
+import { FIXED_STEP, Simulation } from '../src/game/simulation.ts';
 import { createMatchSettings, resolveMatchSettings } from '../src/game/match-settings.ts';
 import { createMultiplayerServer } from './multiplayer.mjs';
 
@@ -22,6 +22,8 @@ Object.assign(featureSettings, {
   minions: { enabled: true, count: 10 }, towers: { enabled: true, count: 3, laneCount: 3 },
   spBox: { enabled: true, count: 3 }, startingSp: { enabled: true, amount: 50 },
   passiveSp: { enabled: false, amount: 1 },
+  towerLossReward: { enabled: true, amount: 9 },
+  environment: { map: 'forest', weather: 'fog' },
 });
 const settingsCases = [
   ['default', createMatchSettings()], ['no-passive', noPassiveSettings],
@@ -101,9 +103,12 @@ for (const [name, settings] of settingsCases) test(`${name}: server owns setting
   const expected = resolveMatchSettings(settings);
   const created = await request(host, { type: 'create', settings, rules: forgedRules }, isRoom);
   assert.deepEqual(created.rules, expected, 'raw rules cannot change the validated host settings');
+  assert.deepEqual(created.environmentSettings, settings.environment);
   const guest = await f.client();
   const joined = await request(guest, { type: 'join', code: created.code, settings: noPassiveSettings, gameMode: 'no-kill-sp', rules: forgedRules }, isRoom);
   assert.deepEqual(joined.rules, expected);
+  assert.deepEqual(joined.environmentSettings, settings.environment);
+  assert.equal(joined.map, created.map); assert.equal(joined.weather, created.weather);
   await request(host, { type: 'deck', deck: hostDeck }, isRoom);
   await request(guest, { type: 'deck', deck: guestDeck }, isRoom);
   await start(host, guest);
@@ -144,9 +149,35 @@ test('enabled feature settings reach both clients with lane assignments, minions
   assert.equal(own.length, 2);
   assert.notEqual(own[0].lane, own[1].lane, 'the authority balances tap summons across friendly lane populations');
   assert.equal(after.state.rules.lanes.count, 3);
+  assert.deepEqual(after.state.rules.sp.towerLoss, { enabled: true, amount: 9 });
   const tower = after.state.structures.find((entity) => entity.kind === 'tower' && entity.side === 'player');
   const rejected = await request(host, { type: 'summon', unitId: 'warrior', position: { x: tower.x, y: tower.y } }, isError);
   assert.match(rejected.message, /소환하지 못했습니다/);
+});
+
+test('authoritative tower loss SP reaches both clients and pays only the destroyed tower owner', async (t) => {
+  const f = await fixture(t, {
+    createSimulation(configuration) {
+      const simulation = new Simulation(configuration);
+      const tower = simulation.state.structures.find((entity) => entity.kind === 'tower' && entity.side === 'player');
+      tower.burn = { sourceSide: 'neutral', damage: 1000, expiresAt: 1, nextTickAt: FIXED_STEP };
+      simulation.update(FIXED_STEP);
+      return simulation;
+    },
+  });
+  const settings = createMatchSettings();
+  settings.startingSp.amount = 10; settings.passiveSp.enabled = false;
+  settings.towers.enabled = true; settings.towerLossReward = { enabled: true, amount: 9 };
+  const { host, guest } = await pair(f, [hostDeck, guestDeck], settings);
+  await start(host, guest);
+  for (const client of [host, guest]) {
+    const initial = await waitFor(client, (message) => message.type === 'battle');
+    assert.deepEqual(initial.state.sp, { player: 19, enemy: 10 });
+    assert.deepEqual(initial.state.rules.sp.towerLoss, settings.towerLossReward);
+    assert.equal(initial.state.structures.filter((entity) => entity.kind === 'tower').length, 1);
+  }
+  const elapsed = await waitFor(guest, (message) => message.type === 'battle' && message.state.time >= 0.2);
+  assert.deepEqual(elapsed.state.sp, { player: 19, enemy: 10 }, 'later updates never award the same tower twice');
 });
 
 test('private room validates codes and capacity, starts on readiness, and keeps opponent deck private', async (t) => {
@@ -229,6 +260,81 @@ test('room settings reject malformed, extra, out-of-range and forged combat fiel
   }
   const created = await request(host, { type: 'create', settings: createMatchSettings() }, isRoom);
   assert.equal(created.rules.sp.maximum, 50);
+});
+
+test('environment selections and tower loss reward reject invalid types, limits and extra fields', async (t) => {
+  const f = await fixture(t);
+  const host = await f.client();
+  const mutations = [
+    (s) => { s.environment.map = 'unknown'; }, (s) => { s.environment.weather = 'snow'; },
+    (s) => { s.environment.map = '__proto__'; }, (s) => { s.environment.weather = 'constructor'; },
+    (s) => { s.environment.map = null; }, (s) => { s.environment.weather = 3; },
+    (s) => { s.environment = null; }, (s) => { s.environment = []; },
+    (s) => { s.environment.seed = 1; }, (s) => { delete s.environment.weather; },
+    (s) => { s.towerLossReward.enabled = 'true'; }, (s) => { s.towerLossReward.amount = 0; },
+    (s) => { s.towerLossReward.amount = 51; }, (s) => { s.towerLossReward.amount = 1.5; },
+    (s) => { s.towerLossReward.amount = null; }, (s) => { s.towerLossReward.amount = '5'; },
+    (s) => { s.towerLossReward.multiplier = 2; },
+  ];
+  for (const mutate of mutations) {
+    const settings = createMatchSettings(); mutate(settings);
+    assert.match((await request(host, { type: 'create', settings }, isError)).message, /경기 설정/);
+  }
+  const settings = createMatchSettings();
+  settings.towerLossReward = { enabled: true, amount: 50 };
+  const created = await request(host, { type: 'create', settings }, isRoom);
+  assert.deepEqual(created.rules.sp.towerLoss, settings.towerLossReward);
+  assert.equal(created.rules.sp.maximum, 50);
+});
+
+for (const selection of [
+  { map: 'forest', weather: 'rain' }, { map: 'forest', weather: 'random' },
+  { map: 'random', weather: 'rain' }, { map: 'random', weather: 'random' },
+]) test(`${selection.map}/${selection.weather}: room shares fixed selections and redraws only random fields on rematch`, async (t) => {
+  const originalRandom = Math.random;
+  t.after(() => { Math.random = originalRandom; });
+  const f = await fixture(t, {
+    createSimulation(configuration) {
+      const simulation = new Simulation(configuration);
+      const update = simulation.update.bind(simulation);
+      simulation.update = (dt) => { update(dt); if (simulation.state.time >= 0.1) simulation.surrender('enemy'); };
+      return simulation;
+    },
+  });
+  const settings = createMatchSettings(); settings.environment = { ...selection };
+  const forged = { map: 'swamp', weather: 'fog' };
+  Math.random = () => 0;
+  const host = await f.client();
+  const created = await request(host, { type: 'create', settings, map: forged.map, weather: forged.weather, environment: forged, environmentSettings: forged }, isRoom);
+  assert.deepEqual(created.environmentSettings, selection);
+  assert.equal(created.map, selection.map === 'random' ? 'desert' : selection.map);
+  assert.equal(created.weather, selection.weather === 'random' ? 'sunny' : selection.weather);
+  const guest = await f.client();
+  const joined = await request(guest, { type: 'join', code: created.code, settings: { ...settings, environment: forged }, environment: forged, map: forged.map, weather: forged.weather }, isRoom);
+  assert.deepEqual(joined.environmentSettings, selection);
+  assert.equal(joined.map, created.map); assert.equal(joined.weather, created.weather);
+  await request(host, { type: 'deck', deck: hostDeck }, isRoom);
+  await request(guest, { type: 'deck', deck: guestDeck }, isRoom);
+  await start(host, guest);
+  const first = await waitFor(host, (message) => message.type === 'battle');
+  assert.equal(first.state.map, created.map); assert.equal(first.state.weather, created.weather);
+  await waitFor(host, (message) => isRoom(message) && message.phase === 'result');
+  Math.random = () => 0.999999;
+  await request(host, { type: 'rematch', settings: createMatchSettings(), environment: forged }, (message) => isRoom(message) && message.rematchRequested);
+  const after = host.messages.length;
+  const restarted = await request(guest, { type: 'rematch', settings: { ...settings, environment: forged }, environmentSettings: forged }, (message) => isRoom(message) && message.phase === 'waiting');
+  const hostRestart = await waitFor(host, (message) => isRoom(message) && message.phase === 'waiting', after);
+  assert.deepEqual(restarted.environmentSettings, selection);
+  assert.deepEqual(hostRestart.environmentSettings, selection);
+  assert.equal(restarted.map, selection.map === 'random' ? 'road' : selection.map);
+  assert.equal(restarted.weather, selection.weather === 'random' ? 'fog' : selection.weather);
+  assert.equal(hostRestart.map, restarted.map); assert.equal(hostRestart.weather, restarted.weather);
+  await request(host, { type: 'deck', deck: hostDeck }, isRoom);
+  await request(guest, { type: 'deck', deck: guestDeck }, isRoom);
+  const battleAfter = guest.messages.length;
+  await start(host, guest);
+  const second = await waitFor(guest, (message) => message.type === 'battle', battleAfter);
+  assert.equal(second.state.map, restarted.map); assert.equal(second.state.weather, restarted.weather);
 });
 
 for (const [name, settings] of settingsCases.slice(1, 3)) test(`${name}: host economic settings apply equally to both players`, async (t) => {
@@ -345,6 +451,9 @@ for (const [name, settings] of settingsCases) test(`${name}: both rematch reques
   assert.equal(restarted.gameMode, 'standard');
   assert.equal(hostRestart.gameMode, 'standard');
   assert.deepEqual(restarted.rules, resolveMatchSettings(settings));
+  assert.deepEqual(restarted.environmentSettings, settings.environment);
+  if (settings.environment.map !== 'random') assert.equal(restarted.map, settings.environment.map);
+  if (settings.environment.weather !== 'random') assert.equal(restarted.weather, settings.environment.weather);
   assert.deepEqual(hostRestart.rules, restarted.rules);
   assert.deepEqual(restarted.deck, []);
   assert.deepEqual(hostRestart.deck, []);

@@ -1,8 +1,8 @@
 import { randomInt } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { WebSocket, WebSocketServer } from 'ws';
-import { DECK_DURATION, DECK_SIZE, UNIT_IDS, completeDeck, randomEnvironment } from '../src/game/data.ts';
-import { createMatchSettings, resolveMatchSettings, validateMatchSettings } from '../src/game/match-settings.ts';
+import { DECK_DURATION, DECK_SIZE, UNIT_IDS, completeDeck } from '../src/game/data.ts';
+import { createMatchSettings, resolveMatchEnvironment, resolveMatchSettings, validateMatchSettings } from '../src/game/match-settings.ts';
 import { Simulation } from '../src/game/simulation.ts';
 
 const SIDES = ['player', 'enemy'];
@@ -36,6 +36,7 @@ export function createMultiplayerServer(httpServer, options = {}) {
     return {
       type: 'room', code: room.code, side, phase: room.phase,
       map: room.map, weather: room.weather, gameMode: room.gameMode, deck: [...own.deck],
+      environmentSettings: room.environmentSettings,
       rules: room.simulation?.state.rules ?? room.rules,
       ready: own.ready, opponentReady: other?.ready ?? false,
       opponentConnected: other?.socket?.readyState === WebSocket.OPEN,
@@ -115,14 +116,18 @@ export function createMultiplayerServer(httpServer, options = {}) {
         if (request.gameMode !== undefined && request.gameMode !== 'standard') {
           error(socket, '지원하지 않는 게임 모드입니다.'); return;
         }
-        let rules;
-        try { rules = resolveMatchSettings(request.settings === undefined ? createMatchSettings() : validateMatchSettings(request.settings)); }
+        let settings, rules;
+        try {
+          settings = validateMatchSettings(request.settings === undefined ? createMatchSettings() : request.settings);
+          rules = resolveMatchSettings(settings);
+        }
         catch { error(socket, '경기 설정이 올바르지 않습니다.'); return; }
         if (rooms.size >= maxRooms) { error(socket, '현재 방이 많아 새 방을 만들 수 없습니다. 잠시 후 다시 시도해 주세요.'); return; }
         let code;
         do { code = String(randomInt(100000, 1000000)); } while (rooms.has(code));
+        const environmentSettings = structuredClone(settings.environment);
         const room = {
-          code, gameMode: 'standard', rules, ...randomEnvironment(), phase: 'waiting', deadline: null,
+          code, gameMode: 'standard', rules, environmentSettings, ...resolveMatchEnvironment(environmentSettings), phase: 'waiting', deadline: null,
           members: { player: member(socket), enemy: null }, simulation: null,
         };
         rooms.set(code, room);
@@ -184,7 +189,7 @@ export function createMultiplayerServer(httpServer, options = {}) {
         if (!other?.socket) { error(socket, '상대가 방을 나갔습니다. 새 방을 만들어 주세요.'); return; }
         own.rematch = true;
         if (other.rematch) {
-          Object.assign(room, randomEnvironment(), { phase: 'waiting', simulation: null, deadline: performance.now() + preparationSeconds * 1000 });
+          Object.assign(room, resolveMatchEnvironment(room.environmentSettings), { phase: 'waiting', simulation: null, deadline: performance.now() + preparationSeconds * 1000 });
           for (const side of SIDES) Object.assign(room.members[side], { deck: [], ready: false, rematch: false });
         }
         broadcastRoom(room); return;

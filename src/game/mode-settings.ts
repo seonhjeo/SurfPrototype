@@ -10,6 +10,7 @@ export interface ModeRules {
   sp: {
     initial: number; maximum: number;
     passive: { enabled: boolean; amount: number };
+    towerLoss: { enabled: boolean; amount: number };
     summoned: RewardRule; minion: RewardRule; elite: RewardRule; neutral: RewardRule;
   };
 }
@@ -28,7 +29,7 @@ export function makeModeRules(initial: number, regen: number, killRewards: boole
     },
     towers: { enabled: false, count: 1, laneCount: 1, hp: 250, damage: 12, range: 4, interval: 1.5, radius: 0.45, progress: 0.24 },
     spBox: { enabled: false, count: 1, hp: 200, radius: 0.5, interactionRadius: 3.2, spPerDamage: 0.1, respawnDelay: null },
-    sp: { initial, maximum: 50, passive: { enabled: regen > 0, amount: regen }, summoned: reward(null), minion: reward(1), elite: reward(3), neutral: reward(null) },
+    sp: { initial, maximum: 50, passive: { enabled: regen > 0, amount: regen }, towerLoss: { enabled: false, amount: 5 }, summoned: reward(null), minion: reward(1), elite: reward(3), neutral: reward(null) },
   };
 }
 
@@ -52,6 +53,7 @@ export function mergeModeRules(base: ModeRules, overrides?: ModeRulesOverride): 
   if (result.neutralWaves.count !== null && !countWithin(result.neutralWaves.count, 10)) throw new Error('neutral count must be null or an integer from 1 to 10');
   if (!countWithin(result.towers.count, 3) || !countWithin(result.towers.laneCount, 3) || !countWithin(result.spBox.count, 3)) throw new Error('structure counts must be integers from 1 to 3');
   if (!countWithin(result.minions.perLane, 10)) throw new Error('minion count must be an integer from 1 to 10');
+  if (!countWithin(result.sp.towerLoss.amount, 50)) throw new Error('tower loss reward must be an integer from 1 to 50');
   if (result.minions.eliteEvery < 1 || !Number.isInteger(result.minions.eliteEvery) || !Number.isInteger(result.minions.perLane)) throw new Error('minion counts must be integers');
   if (result.sp.maximum <= 0 || result.spBox.interactionRadius < result.spBox.radius || result.towers.progress > 0.5) throw new Error('invalid mode geometry or resource cap');
   for (const weapon of [result.fortAttacks.catapult, result.fortAttacks.oil, result.towers]) if (weapon.interval <= 0) throw new Error('attack interval must be positive');

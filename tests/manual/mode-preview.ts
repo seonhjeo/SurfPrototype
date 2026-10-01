@@ -22,6 +22,7 @@ const observer = new MutationObserver(restrictLobby);
 observer.observe(document.querySelector('#screen')!, { childList: true });
 document.querySelector<HTMLButtonElement>('[data-action="ai"]')!.click();
 for (const [key, option] of Object.entries(settings)) {
+  if (key === 'environment') continue;
   const row = document.querySelector<HTMLElement>(`[data-setting="${key}"]`)!;
   const toggle = row.querySelector<HTMLInputElement>('[data-enabled]')!;
   toggle.checked = option.enabled;

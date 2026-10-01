@@ -1,6 +1,7 @@
 import { createMatchSettings, MATCH_SETTING_DEFINITIONS, validateMatchSettings } from './game/match-settings';
-import type { MatchSettingDefinition, MatchSettings } from './game/match-settings';
-import type { ModeRules } from './game/data';
+import type { EnvironmentSettings, MatchSettingDefinition, MatchSettings } from './game/match-settings';
+import { MAPS, WEATHER } from './game/data';
+import type { Environment, MapId, ModeRules, WeatherId } from './game/data';
 import { matchRuleDetails } from './game/mode-description';
 
 type Option = { enabled: boolean; amount?: number | null; count?: number | null; laneCount?: number };
@@ -68,12 +69,29 @@ export function openMatchSettingsDialog(settings: MatchSettings, destination: 'a
       });
     }
   };
+  const refreshEnvironment = () => {
+    form.querySelector<HTMLSelectElement>('#setting-map')!.value = draft.environment.map;
+    form.querySelector<HTMLSelectElement>('#setting-weather')!.value = draft.environment.weather;
+    form.querySelector<HTMLElement>('#setting-map-help')!.textContent = draft.environment.map === 'random'
+      ? '준비방 진입 때 맵을 무작위로 정합니다.' : MAPS[draft.environment.map].gimmickDescription;
+    form.querySelector<HTMLElement>('#setting-weather-help')!.textContent = draft.environment.weather === 'random'
+      ? '준비방 진입 때 날씨를 무작위로 정합니다.' : WEATHER[draft.environment.weather].description;
+  };
   const render = () => {
-    const groups = [...new Set(MATCH_SETTING_DEFINITIONS.map((definition) => definition.section))];
-    sections.innerHTML = groups.map((group) => `<section class="settings-group"><h3>${group}</h3>${MATCH_SETTING_DEFINITIONS.filter((definition) => definition.section === group).map((definition) => `<div class="setting-row" data-setting="${definition.key}"><div class="setting-heading"><div><h4>${definition.label}</h4><p id="help-${definition.key}">${definition.help}</p></div><label class="setting-switch"><input type="checkbox" role="switch" data-enabled aria-label="${definition.label} 사용" aria-describedby="help-${definition.key}"><span class="switch-track" aria-hidden="true"></span><span data-toggle-label aria-hidden="true"></span></label></div>${definition.defaultLabel ? `<label class="setting-default"><input type="checkbox" data-default>${definition.defaultLabel}</label>` : ''}${definition.extra ? numberControl(definition, definition.extra.field, definition.extra.label, definition.extra.min, definition.extra.max, definition.extra.step, definition.extra.unit) : ''}${definition.field ? numberControl(definition, definition.field, definition.key === 'towers' ? '라인당 포탑 수' : `${definition.label} ${definition.field === 'count' ? '수량' : '획득량'}`, definition.min!, definition.max!, definition.step!, definition.unit!) : ''}</div>`).join('')}</section>`).join('');
+    const groups = ['전장과 병력', '성채와 구조물', 'SP 획득'];
+    sections.innerHTML = `<section class="settings-group settings-environment"><h3>환경</h3><div class="setting-row"><label for="setting-map">맵</label><select id="setting-map" data-environment="map" aria-describedby="setting-map-help"><option value="random">무작위</option>${Object.values(MAPS).map((map) => `<option value="${map.id}">${map.name}</option>`).join('')}</select><p id="setting-map-help"></p></div><div class="setting-row"><label for="setting-weather">날씨</label><select id="setting-weather" data-environment="weather" aria-describedby="setting-weather-help"><option value="random">무작위</option>${Object.values(WEATHER).map((weather) => `<option value="${weather.id}">${weather.name}</option>`).join('')}</select><p id="setting-weather-help"></p></div><p class="settings-note">재대전에서도 선택한 맵·날씨를 유지합니다. 무작위 항목만 다시 추첨합니다.</p></section>`
+      + groups.map((group) => `<section class="settings-group"><h3>${group}</h3>${MATCH_SETTING_DEFINITIONS.filter((definition) => definition.section === group).map((definition) => `<div class="setting-row" data-setting="${definition.key}"><div class="setting-heading"><div><h4>${definition.label}</h4><p id="help-${definition.key}">${definition.help}</p></div><label class="setting-switch"><input type="checkbox" role="switch" data-enabled aria-label="${definition.label} 사용" aria-describedby="help-${definition.key}"><span class="switch-track" aria-hidden="true"></span><span data-toggle-label aria-hidden="true"></span></label></div>${definition.defaultLabel ? `<label class="setting-default"><input type="checkbox" data-default>${definition.defaultLabel}</label>` : ''}${definition.extra ? numberControl(definition, definition.extra.field, definition.extra.label, definition.extra.min, definition.extra.max, definition.extra.step, definition.extra.unit) : ''}${definition.field ? numberControl(definition, definition.field, definition.key === 'towers' ? '라인당 포탑 수' : `${definition.label} ${definition.field === 'count' ? '수량' : '획득량'}`, definition.min!, definition.max!, definition.step!, definition.unit!) : ''}</div>`).join('')}</section>`).join('');
+    refreshEnvironment();
     MATCH_SETTING_DEFINITIONS.forEach(refreshRow);
   };
   render();
+  form.addEventListener('change', (event) => {
+    const input = event.target as HTMLSelectElement;
+    if (input.dataset.environment === 'map') draft.environment.map = input.value as MapId | 'random';
+    else if (input.dataset.environment === 'weather') draft.environment.weather = input.value as WeatherId | 'random';
+    else return;
+    error.textContent = ''; refreshEnvironment();
+  });
   form.addEventListener('input', (event) => {
     const input = event.target as HTMLInputElement;
     const row = input.closest<HTMLElement>('[data-setting]');
@@ -131,9 +149,14 @@ export function openMatchSettingsDialog(settings: MatchSettings, destination: 'a
   return close;
 }
 
-export function openMatchRulesDialog(rules: ModeRules): () => void {
+export function openMatchRulesDialog(rules: ModeRules, environment: Environment, selection: EnvironmentSettings): () => void {
   const { dialog, close } = mountDialog('이번 경기 설정', '양 진영에 공통 적용 · 재대전에도 유지됩니다.');
-  dialog.insertAdjacentHTML('beforeend', `<div class="settings-scroll settings-readonly"><dl>${matchRuleDetails(rules).map(([label, value]) => `<div><dt>${escape(label)}</dt><dd>${escape(value)}</dd></div>`).join('')}</dl></div><div class="settings-footer"><button type="button" class="button primary" data-close>확인</button></div>`);
+  const details = [
+    ['맵', `${MAPS[environment.map].name} · ${selection.map === 'random' ? '무작위 선택' : '고정'}`],
+    ['날씨', `${WEATHER[environment.weather].name} · ${selection.weather === 'random' ? '무작위 선택' : '고정'}`],
+    ...matchRuleDetails(rules),
+  ];
+  dialog.insertAdjacentHTML('beforeend', `<div class="settings-scroll settings-readonly"><dl>${details.map(([label, value]) => `<div><dt>${escape(label)}</dt><dd>${escape(value)}</dd></div>`).join('')}</dl></div><div class="settings-footer"><button type="button" class="button primary" data-close>확인</button></div>`);
   dialog.showModal();
   return close;
 }
