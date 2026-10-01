@@ -3,12 +3,14 @@ import type { EnvironmentSettings, MatchSettingDefinition, MatchSettings } from 
 import { MAPS, WEATHER } from './game/data';
 import type { Environment, MapId, ModeRules, WeatherId } from './game/data';
 import { matchRuleDetails } from './game/mode-description';
+import { mountMatchPresetControls } from './match-presets-controls';
 
 type Option = { enabled: boolean; amount?: number | null; count?: number | null; laneCount?: number };
 type Field = 'amount' | 'count' | 'laneCount';
 const escape = (value: string) => value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 
 function mountDialog(title: string, subtitle: string) {
+  const events = new AbortController();
   const previousFocus = document.activeElement;
   const dialog = document.createElement('dialog');
   dialog.className = 'settings-dialog';
@@ -19,6 +21,7 @@ function mountDialog(title: string, subtitle: string) {
   const close = () => {
     if (closed) return;
     closed = true;
+    events.abort();
     dialog.close(); dialog.remove();
     if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
   };
@@ -30,11 +33,11 @@ function mountDialog(title: string, subtitle: string) {
       if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) close();
     }
   });
-  return { dialog, close };
+  return { dialog, close, signal: events.signal };
 }
 
 export function openMatchSettingsDialog(settings: MatchSettings, destination: 'ai' | 'room', onConfirm: (settings: MatchSettings) => void): () => void {
-  const { dialog, close } = mountDialog('경기를 설정하세요', `${destination === 'ai' ? 'AI와 대전' : '비공개 방 만들기'} · 설정을 마치면 덱을 준비합니다.`);
+  const { dialog, close, signal } = mountDialog('경기를 설정하세요', `${destination === 'ai' ? 'AI와 대전' : '비공개 방 만들기'} · 설정을 마치면 덱을 준비합니다.`);
   let draft = structuredClone(settings);
   let lastLaneCount = draft.lanes.count || 1;
   const customValues = new Map<string, number>();
@@ -85,6 +88,22 @@ export function openMatchSettingsDialog(settings: MatchSettings, destination: 'a
     MATCH_SETTING_DEFINITIONS.forEach(refreshRow);
   };
   render();
+  const readSettings = () => {
+    if (!form.reportValidity()) return null;
+    error.textContent = '';
+    try { return validateMatchSettings(draft); }
+    catch (reason) { error.textContent = reason instanceof Error ? reason.message : '설정을 확인해 주세요.'; return null; }
+  };
+  const presets = document.createElement('section');
+  form.querySelector('.settings-scroll')!.prepend(presets);
+  mountMatchPresetControls(presets, {
+    signal,
+    readSettings,
+    applySettings: (settings) => {
+      draft = settings; customValues.clear(); lastLaneCount = draft.lanes.count || 1;
+      error.textContent = ''; render();
+    },
+  });
   form.addEventListener('change', (event) => {
     const input = event.target as HTMLSelectElement;
     if (input.dataset.environment === 'map') draft.environment.map = input.value as MapId | 'random';
@@ -139,11 +158,8 @@ export function openMatchSettingsDialog(settings: MatchSettings, destination: 'a
   });
   form.addEventListener('submit', (event) => {
     event.preventDefault();
-    if (!form.reportValidity()) return;
-    try {
-      const confirmed = validateMatchSettings(draft);
-      close(); onConfirm(confirmed);
-    } catch (reason) { error.textContent = reason instanceof Error ? reason.message : '설정을 확인해 주세요.'; }
+    const confirmed = readSettings();
+    if (confirmed) { close(); onConfirm(confirmed); }
   });
   dialog.showModal();
   return close;
