@@ -89,7 +89,7 @@ export class Simulation {
   private aiNext: Record<Side, number> = { player: 0, enemy: 0 };
   private aiSummons: Record<Side, number> = { player: 0, enemy: 0 };
   private routes: LaneRoute[];
-  private boxRespawnAt: number | null = null;
+  private boxRespawns: { at: number; position: Point }[] = [];
 
   constructor(options: SimulationOptions) {
     this.randomState = (options.seed ?? 123456789) >>> 0;
@@ -187,7 +187,11 @@ export class Simulation {
     this.updateProjectiles(dt);
     this.state.units = this.state.units.filter((unit) => unit.hp > 0);
     this.state.structures = this.state.structures.filter((structure) => structure.hp > 0);
-    if (this.boxRespawnAt !== null && now >= this.boxRespawnAt - EPS) { this.createBox(); this.boxRespawnAt = null; }
+    this.boxRespawns = this.boxRespawns.filter((respawn) => {
+      if (now < respawn.at - EPS) return true;
+      this.createBox(respawn.position);
+      return false;
+    });
     this.state.zones = this.state.zones.filter((zone) => zone.expiresAt > now + EPS);
     this.state.effects = this.state.effects.filter((effect) => effect.expiresAt > now);
     const playerDead = this.state.forts.player.hp <= 0;
@@ -215,7 +219,8 @@ export class Simulation {
     const map = MAPS[this.state.map];
     const multiplier = WAVE_GROWTH ** (wave - 1);
     const grow = (definition: MonsterDefinition) => ({ ...definition, hp: definition.hp * multiplier, attack: definition.attack * multiplier });
-    if (this.state.rules.neutralWaves.enabled) for (const targetSide of SIDES) for (const x of [0.6, 11.4]) for (let index = 0; index < map.monstersPerSpawnPoint; index++) {
+    const neutralCount = this.state.rules.neutralWaves.count ?? map.monstersPerSpawnPoint;
+    if (this.state.rules.neutralWaves.enabled) for (const targetSide of SIDES) for (const x of [0.6, 11.4]) for (let index = 0; index < neutralCount; index++) {
       // Extra monsters extend into their destination half, keeping every body off the center line.
       const point = { x: x + (x < 6 ? 1 : -1) * index * 0.28, y: ARENA_HEIGHT / 2 + (targetSide === 'player' ? 1 : -1) * (0.18 + index * 0.12) };
       const unit = this.createUnit('neutral', targetSide, point, grow(map.monster), false);
@@ -264,16 +269,24 @@ export class Simulation {
 
   private createStructures(): void {
     const rules = this.state.rules.towers;
-    if (rules.enabled) for (const side of SIDES) for (const route of this.routes) {
-      const progress = route.length * (side === 'player' ? rules.progress : 1 - rules.progress);
-      this.state.structures.push({ id: this.nextId++, kind: 'tower', side, lane: this.state.rules.lanes.count > 0 ? route.id : null, ...pointOnLane(route, progress), hp: rules.hp, maxHp: rules.hp, radius: rules.radius, interactionRadius: rules.radius, attackReadyAt: 0, burn: null, iceDamageAt: -100 });
+    const towerRoutes = getLaneRoutes(rules.laneCount);
+    if (rules.enabled) for (const side of SIDES) for (const route of towerRoutes) for (let index = 0; index < rules.count; index++) {
+      // Multiple towers occupy the separated lane segment, clear of the shared
+      // fort approach and of the center-line boxes. One tower keeps its old spot.
+      const fromFort = rules.count === 1 ? route.length * rules.progress
+        : route.cumulative[2] + (route.length / 2 - 1.5 - route.cumulative[2]) * index / (rules.count - 1);
+      const progress = side === 'player' ? fromFort : route.length - fromFort;
+      this.state.structures.push({ id: this.nextId++, kind: 'tower', side, lane: null, ...pointOnLane(route, progress), hp: rules.hp, maxHp: rules.hp, radius: rules.radius, interactionRadius: rules.radius, attackReadyAt: 0, burn: null, iceDamageAt: -100 });
     }
-    if (this.state.rules.spBox.enabled) this.createBox();
+    if (this.state.rules.spBox.enabled) for (let index = 0; index < this.state.rules.spBox.count; index++) {
+      const x = ARENA_WIDTH / 2 + (index - (this.state.rules.spBox.count - 1) / 2) * 4;
+      this.createBox({ x, y: ARENA_HEIGHT / 2 });
+    }
   }
 
-  private createBox(): void {
+  private createBox(position: Point): void {
     const rules = this.state.rules.spBox;
-    this.state.structures.push({ id: this.nextId++, kind: 'sp-box', side: 'neutral', lane: null, x: 6, y: 10, hp: rules.hp, maxHp: rules.hp, radius: rules.radius, interactionRadius: rules.interactionRadius, attackReadyAt: 0, burn: null, iceDamageAt: -100 });
+    this.state.structures.push({ id: this.nextId++, kind: 'sp-box', side: 'neutral', lane: null, ...position, hp: rules.hp, maxHp: rules.hp, radius: rules.radius, interactionRadius: rules.interactionRadius, attackReadyAt: 0, burn: null, iceDamageAt: -100 });
   }
 
   private updateStructureAttacks(): void {
@@ -569,7 +582,11 @@ export class Simulation {
     entity.hp = Math.max(0, entity.hp - amount);
     if (target.structure?.kind === 'sp-box' && source !== 'neutral') {
       this.awardSp(source, actualDamage * this.state.rules.spBox.spPerDamage);
-      if (entity.hp <= 0 && this.state.rules.spBox.respawnDelay !== null) this.boxRespawnAt = this.state.time + this.state.rules.spBox.respawnDelay;
+      if (entity.hp <= 0 && this.state.rules.spBox.respawnDelay !== null) this.boxRespawns.push({ at: this.state.time + this.state.rules.spBox.respawnDelay, position: { x: entity.x, y: entity.y } });
+    }
+    if (entity.hp <= 0 && target.structure?.kind === 'tower' && target.structure.side !== 'neutral') {
+      const reward = this.state.rules.sp.towerLoss;
+      if (reward.enabled) this.awardSp(target.structure.side, reward.amount);
     }
     if (entity.hp <= 0 && target.unit) {
       const victim = target.unit;
