@@ -19,6 +19,8 @@ npm run dev
 로비에서 `AI와 대전` 또는 `비공개 방 만들기`를 누르면 경기 설정창이 먼저 열립니다. 맵과 날씨를 각각 무작위 또는 고정으로 선택한 뒤 이동 라인·중립 몬스터·미니언·포탑·SP 상자의 ON/OFF와 수량, 투석기·끓는 기름 사용 여부를 정합니다. 맨 아래 SP 획득 항목에서 시작·회복·처치 보상과 내 포탑 파괴 시 받을 SP를 설정합니다. 포탑 파괴 보상은 기본 OFF이며 켜면 파괴된 포탑을 소유한 진영에 개당 1~50 SP를 한 번 지급합니다. 설정 완료 후 준비방으로 이동하며 취소하면 방을 만들지 않습니다.
 이동 라인은 0~3개입니다. 포탑 배치 라인 1~3개와 라인당 포탑 1~3개는 이동 라인과 별개로 정하므로 자유 이동에서도 포탑을 설치할 수 있습니다. 기본값은 시작 5 SP·초당 1 SP·자동 획득 한도 50 SP이며 중립 몬스터만 켜져 있습니다. 처치·포탑 파괴·상자 보상은 50을 넘겨 보유할 수 있고, 50 이상에서는 자동 획득만 정지합니다. 소비로 50 미만이 되면 자동 획득을 재개합니다. 상세 수량 범위는 [경기 설정 기획](Docs/기획서/게임모드.md)을 참고하세요.
 비공개 방에 코드로 참가하면 방장의 경기 설정을 사용하며, 준비방의 `경기 설정 확인`에서 전체 규칙을 볼 수 있습니다. 재대전에서도 같은 설정을 유지하고 맵·날씨의 무작위 항목만 다시 추첨합니다. 준비방에서 맵·날씨를 보고 유닛을 고르세요.
+
+설정창의 `내 프리셋`에서 현재 설정을 이름으로 저장하고 불러올 수 있습니다. `관리`에서 덮어쓰기·이름 변경·삭제를 하며, 프리셋은 같은 브라우저 프로필과 사이트에 저장되어 새로고침 후에도 유지됩니다. 저장·삭제는 즉시 반영되지만 불러온 경기 설정은 `설정 완료`를 눌러야 적용됩니다. 선택 항목 또는 전체를 JSON으로 내보내 다른 브라우저에서 가져올 수 있고, 같은 이름은 기존 항목을 유지한 채 `(2)`부터 번호를 붙여 추가합니다. 이름은 40자, 목록은 100개, 가져올 파일은 1 MiB까지 지원합니다. [프리셋 기획과 저장 범위](Docs/기획서/로컬설정프리셋.md)를 참고하세요.
 양쪽 입장 후 30초가 지나거나 양쪽이 준비하면 빈 슬롯을 중복 없이 채워 전투를 시작합니다.
 카드를 누르면 성채 앞에 소환하고, 카드를 아군 전장으로 끌면 놓은 곳에 소환합니다. 경계 밖·성채 위 드롭은 취소됩니다.
 성채 파괴 또는 5분 종료 시 체력 비교로 승패를 정합니다. 경기 중 이탈·연결 종료는 패배이며 재접속은 없습니다.
@@ -53,7 +55,7 @@ HTTPS 앞단에서는 WebSocket 업그레이드를 `/ws`로 전달하도록 구�
 
 Vercel은 화면을 배포하고 Render의 단일 Node.js 24 프로세스가 기존 WebSocket 연결과 방·전투를 관리합니다. 서버가 입장·덱·준비·SP·소환·결과를 검증하며 각 참가자에게 자신의 덱만 전달합니다. 공개 화면은 [surf-prototype.vercel.app](https://surf-prototype.vercel.app/), 게임 서버는 `wss://surf-multiplayer.onrender.com/ws`입니다.
 
-1. 현재 Render 서비스는 대시보드에서 수동 구성했으며 [PR #9](https://github.com/seonhjeo/SurfPrototype/pull/9)의 `main`·`ab8c4ae`를 배포했습니다. `Auto-Deploy=On Commit`으로 PR 병합 커밋을 자동 배포합니다. Node.js 24.19.0·Free 단일 인스턴스·Singapore 지역을 사용합니다. 저장소의 `render.yaml`은 이전 작업 브랜치 `0.3.1-private-connection-fix`를 가리키므로 현재 서비스의 배포 브랜치와 다릅니다.
+1. 현재 Render 서비스는 대시보드에서 수동 구성했으며 [PR #10](https://github.com/seonhjeo/SurfPrototype/pull/10)의 `main`·`7b61b6f`를 배포했습니다. `Auto-Deploy=On Commit`으로 PR 병합 커밋을 자동 배포합니다. Node.js 24.19.0·Free 단일 인스턴스·Singapore 지역을 사용합니다. 저장소의 `render.yaml`은 이전 작업 브랜치 `0.3.1-private-connection-fix`를 가리키므로 현재 서비스의 배포 브랜치와 다릅니다.
 2. Build Command는 `npm ci && npm run build`, 실제 Start Command는 `npm run start`(`npm start`와 같은 스크립트), Health Check Path는 `/healthz`입니다. `server/start.mjs`는 Render가 제공한 `PORT`로 `0.0.0.0`에서 접속을 받습니다. [Render Web Service 설정](https://render.com/docs/web-services)을 참고하세요.
 3. 현재 Render의 `MULTIPLAYER_ALLOWED_ORIGINS`는 `https://surf-prototype.vercel.app`만 허용합니다. Preview에서 같은 서버를 테스트하려면 해당 출처를 정확히 추가해야 합니다.
 4. [서버 상태 확인](https://surf-multiplayer.onrender.com/healthz)은 HTTP 200과 `{"status":"ok","service":"surf-multiplayer"}`를 반환합니다. 이 경로는 방 상태나 인증 정보를 노출하지 않습니다.
@@ -69,6 +71,8 @@ PVP 화면은 서버 상태 사이의 좌표를 150ms 동안 보간합니다. �
 모드 설정 리팩터링 후에는 자동 테스트 95/95개·타입 검사·프로덕션 빌드를 통과했고 사용자가 로컬 테스트 완료 후 병합·배포를 요청했습니다. [PR #8](https://github.com/seonhjeo/SurfPrototype/pull/8)의 `main`·`9291655`를 Vercel Production과 Render에 같은 커밋으로 배포했습니다. 세 모드의 공개 WebSocket 규칙 공유·덱 비공개·양쪽 소환·이탈 결과와 실제 Production 브라우저 두 탭의 대전·이탈 승리·콘솔 오류 0을 확인했습니다. 당시 세 모드의 새 기능 OFF·라인 0을 유지했습니다. 상세 배포 ID와 확인 범위는 [당시 Production 검증](Docs/개발문서/공개PVP배포.md#모드-설정-리팩터링-production-검증--2026-09-30)에 기록했습니다.
 
 경기 설정 팝업과 맵·날씨 선택·포탑 소유진영 SP 보상은 사용자 승인 후 [PR #9](https://github.com/seonhjeo/SurfPrototype/pull/9)로 배포했습니다. 2026-10-01 09:42 KST의 `main`·`ab8c4ae`에 [GitHub CI](https://github.com/seonhjeo/SurfPrototype/actions/runs/36797547872)가 성공했고, 같은 커밋의 Vercel Production 배포 SUCCESS와 Render Live를 확인했습니다. 공개 화면과 서버 상태 확인은 HTTP 200입니다. 공개 WebSocket에서 설정 공유·덱 비공개·포탑 소유진영 SP 지급도 확인했습니다. Production 브라우저 두 탭에서 방장 설정 공유·양쪽 소환·성채 자연 파괴·고정 환경 재대전·새 경기 초기화·참가자 이탈 승리와 콘솔 오류/경고 0을 확인했습니다. 배포 ID와 확인 범위는 [경기 설정 Production 검증](Docs/개발문서/공개PVP배포.md#경기-설정-팝업-production-검증--2026-10-01)에 기록합니다. 서로 다른 기기·네트워크·실제 휴대기기 터치는 이번 확인에 포함하지 않습니다.
+
+SP 초과 보유는 사용자 명시 병합·배포 요청에 따라 [PR #10](https://github.com/seonhjeo/SurfPrototype/pull/10)으로 배포했습니다. 2026-10-01 11:31 KST의 `main`·`7b61b6f`에 [GitHub CI](https://github.com/seonhjeo/SurfPrototype/actions/runs/36806248333)가 성공했고, 같은 커밋의 Vercel Production 성공과 Render 배포 성공·Live 로그, 공개 화면·서버 상태 HTTP 200을 확인했습니다. 공개 WebSocket에서 상자 보상으로 69 SP를 보유·유지하고 30 SP 소비 후 39→40으로 자동 획득이 재개됨을 확인했습니다. 자동 획득 OFF는 67 SP를 유지하고 소비 후 37 SP에서도 증가하지 않았습니다. 공개 브라우저에서는 새 SP 도움말과 콘솔 오류/경고 0을 확인했습니다. 이번 공개 브라우저 경기는 실행하지 않았으며, 로컬 AI/PVP 검증과 [SP Production 검증](Docs/개발문서/공개PVP배포.md#sp-초과-보유-production-검증--2026-10-01)의 확인 범위를 구분합니다.
 
 ## 모드 설정으로 기능 조합하기
 
@@ -121,6 +125,7 @@ const simulation = new Simulation({
 | `src/main.ts`, `src/ui.ts` | 앱 시작, 로비·대기방·경기·결과, 입력과 AI/PVP 흐름 |
 | `src/game/data.ts` | 유닛·맵·날씨·스킬과 밸런스 수치 |
 | `src/game/match-settings.ts`, `src/match-settings-dialog.ts` | 경기 설정 검증·환경 선택과 설정/확인 팝업 |
+| `src/match-presets.ts`, `src/match-presets-controls.ts` | 로컬 프리셋 저장·관리와 JSON 가져오기·내보내기 |
 | `src/game/simulation.ts` | 브라우저·서버 공용 전투 계산과 AI |
 | `src/game/BattleScene.ts` | 연속 좌표 전장과 유닛·성채·효과 렌더링 |
 | `src/network.ts`, `server/` | WebSocket 연결, 비공개 방, 서버 전투 판정과 상태 전달 |
