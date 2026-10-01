@@ -3,7 +3,7 @@ import test from 'node:test';
 import { Simulation, ARENA_WIDTH, ARENA_HEIGHT, FIXED_STEP } from '../src/game/simulation.ts';
 import type { BattleState, SimulationOptions } from '../src/game/simulation.ts';
 import { GAME_MODES, MATCH_DURATION, UNITS, WEATHER } from '../src/game/data.ts';
-import type { GameModeId, MapId, UnitId, WeatherId } from '../src/game/data.ts';
+import type { MapId, UnitId, WeatherId } from '../src/game/data.ts';
 import type { ModeRulesOverride } from '../src/game/mode-settings.ts';
 import { getLaneRoutes, pointOnLane } from '../src/game/lanes.ts';
 
@@ -13,37 +13,38 @@ const decks: UnitId[][] = [
 ];
 const maps: MapId[] = ['desert', 'forest', 'swamp', 'road'];
 const weathers: WeatherId[] = ['sunny', 'rain', 'fog'];
-const modes: GameModeId[] = ['standard', 'limited-sp', 'no-kill-sp'];
+const economyPolicies = ['default', 'no-passive', 'no-rewards'] as const;
 
 // Twelve matches cover every map/weather pair and every lane count in each
-// weather. Rotating the base mode and decks also exercises every summon skill.
+// weather. Rotating the economy settings and decks also exercises every summon skill.
 const scenarios = ([0, 1, 2, 3] as const).flatMap((lanes) => weathers.map((weather, index) => ({
   lanes, weather, map: maps[(lanes + index) % maps.length],
-  gameMode: modes[(lanes + index) % modes.length],
+  economy: economyPolicies[(lanes + index) % economyPolicies.length],
   seed: 1_901 + lanes * 101 + index * 17,
 })));
 
-function enabledRules(lanes: 0 | 1 | 2 | 3): ModeRulesOverride {
+function enabledRules(lanes: 0 | 1 | 2 | 3, economy: typeof economyPolicies[number]): ModeRulesOverride {
   return {
     lanes: { count: lanes },
     minions: { enabled: true },
     fortAttacks: { catapult: { enabled: true }, oil: { enabled: true } },
-    towers: { enabled: true },
-    spBox: { enabled: true, respawnDelay: 4 },
+    towers: { enabled: true, laneCount: Math.max(1, lanes), count: lanes === 0 ? 3 : 2 },
+    spBox: { enabled: true, count: 3, respawnDelay: 4 },
     sp: {
-      initial: 50, maximum: 37, passive: { enabled: true, amount: 1.25 },
-      summoned: { enabled: true, amount: 4.5, multiplier: 2 },
-      minion: { enabled: true, amount: 1.5 },
-      elite: { enabled: true, amount: 8 },
-      neutral: { enabled: true, amount: null, multiplier: 1.75 },
+      initial: 50, maximum: 37, passive: { enabled: economy !== 'no-passive', amount: 1.25 },
+      towerLoss: { enabled: true, amount: 7 },
+      summoned: { enabled: economy !== 'no-rewards', amount: 4.5, multiplier: 2 },
+      minion: { enabled: economy !== 'no-rewards', amount: 1.5 },
+      elite: { enabled: economy !== 'no-rewards', amount: 8 },
+      neutral: { enabled: economy !== 'no-rewards', amount: null, multiplier: 1.75 },
     },
   };
 }
 
 function options(scenario: typeof scenarios[number], deckIndex: number): SimulationOptions {
   return {
-    map: scenario.map, weather: scenario.weather, gameMode: scenario.gameMode,
-    seed: scenario.seed, aiSides: ['enemy'], rules: enabledRules(scenario.lanes),
+    map: scenario.map, weather: scenario.weather,
+    seed: scenario.seed, aiSides: ['enemy'], rules: enabledRules(scenario.lanes, scenario.economy),
     decks: { player: [...decks[deckIndex % decks.length]], enemy: [...decks[(deckIndex + 1) % decks.length]] },
   };
 }
@@ -98,10 +99,10 @@ function summonPlayer(simulation: Simulation, second: number): boolean {
 }
 
 for (const [index, scenario] of scenarios.entries()) {
-  test(`all features complete player vs AI: ${scenario.lanes} lanes/${scenario.map}/${scenario.weather}/${scenario.gameMode}`, () => {
+  test(`all features complete player vs AI: ${scenario.lanes} lanes/${scenario.map}/${scenario.weather}/${scenario.economy}`, () => {
     const simulation = new Simulation(options(scenario, index));
     const initial = simulation.snapshot();
-    assert.equal(initial.structures.filter((entity) => entity.kind === 'tower').length, 2 * Math.max(1, scenario.lanes));
+    assert.equal(initial.structures.filter((entity) => entity.kind === 'tower').length, 2 * initial.rules.towers.laneCount * initial.rules.towers.count);
     assert.ok(initial.structures.some((entity) => entity.kind === 'sp-box'));
     const previous = new Map<number, UnitPosition>();
     let playerSummons = 0;

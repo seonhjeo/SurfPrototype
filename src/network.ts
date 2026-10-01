@@ -1,9 +1,10 @@
 import type { GameModeId, MapId, ModeRules, Side, UnitId, WeatherId } from './game/data.ts';
 import type { BattleState } from './game/simulation.ts';
+import type { EnvironmentSettings, MatchSettings } from './game/match-settings.ts';
 import { waitForMultiplayerServer } from './server-warmup.ts';
 
 export type RoomRequest =
-  | { type: 'create'; gameMode: GameModeId }
+  | { type: 'create'; settings: MatchSettings }
   | { type: 'join'; code: string }
   | { type: 'deck'; deck: UnitId[] }
   | { type: 'ready'; ready: boolean }
@@ -20,6 +21,7 @@ export interface RoomStateMessage {
   rules: ModeRules;
   map: MapId;
   weather: WeatherId;
+  environmentSettings: EnvironmentSettings;
   deck: UnitId[];
   ready: boolean;
   opponentReady: boolean;

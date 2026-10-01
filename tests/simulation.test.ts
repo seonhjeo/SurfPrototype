@@ -2,12 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Simulation, FIXED_STEP, ARENA_WIDTH, ARENA_HEIGHT } from '../src/game/simulation.ts';
 import type { UnitEntity } from '../src/game/simulation.ts';
-import { UNITS, MAPS, GAME_MODES, SP_MAX, FORT_HP, WAVE_FIRST, WAVE_INTERVAL, WAVE_GROWTH, MATCH_DURATION } from '../src/game/data.ts';
-import type { UnitId, Side, GameModeId, WeatherId, MapId } from '../src/game/data.ts';
+import { UNITS, MAPS, SP_MAX, FORT_HP, WAVE_FIRST, WAVE_INTERVAL, WAVE_GROWTH, MATCH_DURATION } from '../src/game/data.ts';
+import type { UnitId, Side, ModeRulesOverride, WeatherId, MapId } from '../src/game/data.ts';
 
 const deck: UnitId[] = ['warrior', 'archer', 'hunter', 'knight', 'commander'];
-const gameModes = Object.keys(GAME_MODES) as GameModeId[];
-const create = (weather: WeatherId = 'sunny', map: MapId = 'desert', aiSides: Side[] = [], gameMode?: GameModeId) => new Simulation({ map, weather, decks: { player: [...deck], enemy: [...deck] }, gameMode, aiSides, seed: 23 });
+const economyPolicies: { name: string; rules: ModeRulesOverride; regen: number; rewards: boolean }[] = [
+  { name: 'default', rules: {}, regen: 1, rewards: true },
+  { name: 'no-passive', rules: { sp: { initial: 20, passive: { enabled: false, amount: 0 } } }, regen: 0, rewards: true },
+  { name: 'no-rewards', rules: { sp: { initial: 20, summoned: { enabled: false }, minion: { enabled: false }, elite: { enabled: false }, neutral: { enabled: false } } }, regen: 1, rewards: false },
+];
+const create = (weather: WeatherId = 'sunny', map: MapId = 'desert', aiSides: Side[] = [], policy = economyPolicies[0]) => new Simulation({ map, weather, decks: { player: [...deck], enemy: [...deck] }, rules: policy.rules, aiSides, seed: 23 });
 const near = (actual: number, expected: number, epsilon = 1e-6) => assert.ok(Math.abs(actual - expected) <= epsilon, `${actual} != ${expected}`);
 
 // Combat fixtures use the public state so focused scenarios do not require waiting
@@ -61,22 +65,22 @@ test('economy regens exactly one SP/sec, caps, and snapshots are isolated JSON',
   assert.deepEqual(JSON.parse(JSON.stringify(copy)), copy);
 });
 
-test('explicit standard mode preserves default economy and limited SP starts both sides at 20 without regeneration', () => {
-  const standard = create('sunny', 'desert', [], 'standard');
+test('default rules stay unchanged and disabled passive income starts both sides at 20 without regeneration', () => {
+  const standard = create('sunny', 'desert');
   const legacy = create();
   standard.update(30); legacy.update(30);
   assert.deepEqual(standard.snapshot(), legacy.snapshot());
-  const limited = create('sunny', 'desert', [], 'limited-sp');
-  assert.equal(limited.state.gameMode, 'limited-sp');
+  const limited = create('sunny', 'desert', [], economyPolicies[1]);
+  assert.equal(limited.state.gameMode, 'standard');
   assert.deepEqual(limited.state.sp, { player: 20, enemy: 20 });
   limited.update(30);
   assert.deepEqual(limited.state.sp, { player: 20, enemy: 20 });
-  assert.equal(limited.snapshot().gameMode, 'limited-sp');
+  assert.equal(limited.snapshot().gameMode, 'standard');
 });
 
-test('no-kill SP starts both sides at 20, regens one SP/sec and retains the 50 SP cap', () => {
-  const sim = create('sunny', 'desert', [], 'no-kill-sp');
-  assert.equal(sim.state.gameMode, 'no-kill-sp');
+test('disabled kill rewards start both sides at 20, regen one SP/sec and retain the 50 SP cap', () => {
+  const sim = create('sunny', 'desert', [], economyPolicies[2]);
+  assert.equal(sim.state.gameMode, 'standard');
   assert.deepEqual(sim.state.sp, { player: 20, enemy: 20 });
   sim.update(3);
   near(sim.state.sp.player, 23);
@@ -84,12 +88,12 @@ test('no-kill SP starts both sides at 20, regens one SP/sec and retains the 50 S
   sim.state.sp.player = 49.9; sim.state.sp.enemy = 49.9;
   sim.update(1);
   assert.deepEqual(sim.state.sp, { player: SP_MAX, enemy: SP_MAX });
-  assert.equal(sim.snapshot().gameMode, 'no-kill-sp');
+  assert.equal(sim.snapshot().gameMode, 'standard');
 });
 
-test('20 SP modes use unchanged summon costs and reject unaffordable or invalid input without charging either side', () => {
-  for (const gameMode of ['limited-sp', 'no-kill-sp'] as GameModeId[]) {
-    const sim = create('sunny', 'desert', [], gameMode);
+test('20 SP settings use unchanged summon costs and reject unaffordable or invalid input without charging either side', () => {
+  for (const policy of economyPolicies.slice(1)) {
+    const sim = create('sunny', 'desert', [], policy);
     for (const side of ['player', 'enemy'] as Side[]) {
       assert.equal(sim.summon(side, 'commander'), false);
       assert.equal(sim.summon(side, 'warrior', { x: 6, y: side === 'player' ? 5 : 15 }), false);
@@ -104,24 +108,24 @@ test('20 SP modes use unchanged summon costs and reject unaffordable or invalid 
       assert.equal(sim.state.sp[side], 2);
     }
     sim.update(1);
-    near(sim.state.sp.player, 2 + GAME_MODES[gameMode].rules.sp.passive.amount);
-    near(sim.state.sp.enemy, 2 + GAME_MODES[gameMode].rules.sp.passive.amount);
+    near(sim.state.sp.player, 2 + policy.regen);
+    near(sim.state.sp.enemy, 2 + policy.regen);
   }
 });
 
 test('fixed-step state is independent of frame partition and seeded AI is deterministic', () => {
-  for (const gameMode of gameModes) {
-    const first = create('rain', 'forest', ['player', 'enemy'], gameMode);
-    const second = create('rain', 'forest', ['player', 'enemy'], gameMode);
+  for (const policy of economyPolicies) {
+    const first = create('rain', 'forest', ['player', 'enemy'], policy);
+    const second = create('rain', 'forest', ['player', 'enemy'], policy);
     first.update(60);
     for (let frame = 0; frame < 3600; frame++) second.update(1 / 60);
     assert.deepEqual(first.snapshot(), second.snapshot());
   }
 });
 
-test('limited SP AI spends affordable reserves instead of waiting for passive income after three summons', () => {
+test('AI without passive SP spends affordable reserves instead of waiting for passive income after three summons', () => {
   const savingDeck: UnitId[] = ['hunter', 'warrior', 'archer', 'commander', 'archmage'];
-  const sim = new Simulation({ map: 'desert', weather: 'sunny', gameMode: 'limited-sp', decks: { player: savingDeck, enemy: savingDeck }, aiSides: ['enemy'], seed: 23 });
+  const sim = new Simulation({ map: 'desert', weather: 'sunny', rules: economyPolicies[1].rules, decks: { player: savingDeck, enemy: savingDeck }, aiSides: ['enemy'], seed: 23 });
   sim.update(4);
   assert.equal(sim.state.wave, 0, 'no neutral pressure or kill rewards before the first wave');
   assert.ok(sim.state.units.filter((unit) => unit.side === 'enemy').length >= 4, 'AI continues summoning affordable units after its third summon');
@@ -440,9 +444,9 @@ test('forts receive skill and burn damage, ignore controls; destruction precedes
   assert.deepEqual(ending.snapshot(), snapshot);
 });
 
-test('neutral kills of either side obey the mode reward rule, including neutral bosses', () => {
-  for (const gameMode of gameModes) for (const side of ['player', 'enemy'] as Side[]) for (const boss of [false, true]) {
-    const sim = create('sunny', 'desert', [], gameMode);
+test('neutral kills of either side obey the selected reward rule, including neutral bosses', () => {
+  for (const policy of economyPolicies) for (const side of ['player', 'enemy'] as Side[]) for (const boss of [false, true]) {
+    const sim = create('sunny', 'desert', [], policy);
     const other = side === 'player' ? 'enemy' : 'player';
     const victim = spawn(sim, side, 'hunter', 6, 12);
     const neutral = spawn(sim, other, 'shield', 6, 11.2);
@@ -451,16 +455,16 @@ test('neutral kills of either side obey the mode reward rule, including neutral 
     sim.state.sp.player = 10; sim.state.sp.enemy = 10;
     sim.update(FIXED_STEP);
     assert.equal(victim.hp, 0);
-    const passiveIncome = GAME_MODES[gameMode].rules.sp.passive.amount * FIXED_STEP;
-    const reward = gameMode === 'no-kill-sp' ? 0 : UNITS.hunter.reward;
+    const passiveIncome = policy.regen * FIXED_STEP;
+    const reward = !policy.rewards ? 0 : UNITS.hunter.reward;
     near(sim.state.sp[other], 10 + reward + passiveIncome);
     near(sim.state.sp[side], 10 + passiveIncome);
   }
 });
 
-test('simultaneous neutral kills reward the first processed side only when mode rewards are enabled', () => {
-  for (const gameMode of gameModes) {
-    const two = create('sunny', 'desert', [], gameMode);
+test('simultaneous neutral kills reward the first processed side only when kill rewards are enabled', () => {
+  for (const policy of economyPolicies) {
+    const two = create('sunny', 'desert', [], policy);
     const first = spawn(two, 'player', 'hunter', 6, 12);
     const second = spawn(two, 'enemy', 'hunter', 6, 10.4);
     const neutral = spawn(two, 'enemy', 'shield', 6, 11.2);
@@ -469,17 +473,17 @@ test('simultaneous neutral kills reward the first processed side only when mode 
     first.attackReadyAt = 0; second.attackReadyAt = 0;
     two.state.sp.player = 10; two.state.sp.enemy = 10;
     two.update(FIXED_STEP);
-    const passiveIncome = GAME_MODES[gameMode].rules.sp.passive.amount * FIXED_STEP;
-    const reward = gameMode === 'no-kill-sp' ? 0 : neutral.reward;
+    const passiveIncome = policy.regen * FIXED_STEP;
+    const reward = !policy.rewards ? 0 : neutral.reward;
     assert.equal(neutral.hp, 0);
     near(two.state.sp.player, 10 + reward + passiveIncome);
     near(two.state.sp.enemy, 10 + passiveIncome);
   }
 });
 
-test('all modes apply their reward policy and cap to summoned, neutral and boss kills on both sides', () => {
-  for (const gameMode of gameModes) for (const side of ['player', 'enemy'] as Side[]) for (const kind of ['summoned', 'neutral', 'boss']) for (const sp of [10, 49, 50]) {
-    const sim = create('sunny', 'desert', [], gameMode);
+test('all economic settings apply their reward policy and cap to summoned, neutral and boss kills on both sides', () => {
+  for (const policy of economyPolicies) for (const side of ['player', 'enemy'] as Side[]) for (const kind of ['summoned', 'neutral', 'boss']) for (const sp of [10, 49, 50]) {
+    const sim = create('sunny', 'desert', [], policy);
     const other = side === 'player' ? 'enemy' : 'player';
     const attacker = spawn(sim, side, 'hunter', 6, 12);
     const victim = spawn(sim, other, 'shield', 6, 11.2);
@@ -492,14 +496,14 @@ test('all modes apply their reward policy and cap to summoned, neutral and boss 
     sim.state.sp[side] = sp; sim.state.sp[other] = 10;
     sim.update(FIXED_STEP);
     assert.equal(victim.hp, 0);
-    const passiveIncome = GAME_MODES[gameMode].rules.sp.passive.amount * FIXED_STEP;
-    const reward = gameMode === 'no-kill-sp' ? 0 : victim.reward;
+    const passiveIncome = policy.regen * FIXED_STEP;
+    const reward = !policy.rewards ? 0 : victim.reward;
     near(sim.state.sp[side], Math.min(SP_MAX, sp + passiveIncome + reward));
     near(sim.state.sp[other], 10 + passiveIncome);
   }
 });
 
-test('melee, slash, projectile, explosion, skill, charge, burn and ice deaths all obey the mode reward policy', () => {
+test('melee, slash, projectile, explosion, skill, charge, burn and ice deaths all obey the selected reward policy', () => {
   const attacks: { id: UnitId; skill: boolean; burn?: boolean; duration: number }[] = [
     { id: 'hunter', skill: false, duration: FIXED_STEP },
     { id: 'warrior', skill: false, duration: FIXED_STEP },
@@ -512,8 +516,8 @@ test('melee, slash, projectile, explosion, skill, charge, burn and ice deaths al
     { id: 'mage', skill: true, burn: true, duration: 1.2 },
     { id: 'archmage', skill: true, duration: 1.2 },
   ];
-  for (const gameMode of gameModes) for (const side of ['player', 'enemy'] as Side[]) for (const attack of attacks) {
-    const sim = create('sunny', 'desert', [], gameMode);
+  for (const policy of economyPolicies) for (const side of ['player', 'enemy'] as Side[]) for (const attack of attacks) {
+    const sim = create('sunny', 'desert', [], policy);
     const other = side === 'player' ? 'enemy' : 'player';
     const y = side === 'player' ? 12 : 8;
     const attacker = spawn(sim, side, attack.id, 6, y);
@@ -524,9 +528,9 @@ test('melee, slash, projectile, explosion, skill, charge, burn and ice deaths al
     else attacker.attackReadyAt = 0;
     sim.state.sp.player = 10; sim.state.sp.enemy = 10;
     sim.update(attack.duration);
-    assert.equal(victim.hp, 0, `${gameMode}/${side}/${attack.id}/${attack.skill}/${attack.burn} is lethal`);
-    const reward = gameMode === 'no-kill-sp' ? 0 : victim.reward;
-    const passiveIncome = GAME_MODES[gameMode].rules.sp.passive.amount * sim.state.time;
+    assert.equal(victim.hp, 0, `${policy.name}/${side}/${attack.id}/${attack.skill}/${attack.burn} is lethal`);
+    const reward = !policy.rewards ? 0 : victim.reward;
+    const passiveIncome = policy.regen * sim.state.time;
     near(sim.state.sp[side], 10 + reward + passiveIncome);
     near(sim.state.sp[other], 10 + passiveIncome);
   }
@@ -654,9 +658,9 @@ test('all 12 environments finish fair AI vs AI matches with low and expensive su
   }
 });
 
-test('20 SP modes complete player vs AI matches across all 12 environments and freeze the completed state', () => {
-  for (const gameMode of ['limited-sp', 'no-kill-sp'] as GameModeId[]) for (const map of ['desert', 'forest', 'swamp', 'road'] as MapId[]) for (const weather of ['sunny', 'rain', 'fog'] as WeatherId[]) {
-    const sim = create(weather, map, ['enemy'], gameMode);
+test('20 SP settings complete player vs AI matches across all 12 environments and freeze the completed state', () => {
+  for (const policy of economyPolicies.slice(1)) for (const map of ['desert', 'forest', 'swamp', 'road'] as MapId[]) for (const weather of ['sunny', 'rain', 'fog'] as WeatherId[]) {
+    const sim = create(weather, map, ['enemy'], policy);
     let playerSummons = 0;
     let sawEnemy = false;
     for (let second = 0; second < MATCH_DURATION && !sim.state.result; second++) {
@@ -667,8 +671,8 @@ test('20 SP modes complete player vs AI matches across all 12 environments and f
       sawEnemy ||= sim.state.units.some((unit) => unit.side === 'enemy');
       for (const side of ['player', 'enemy'] as Side[]) assert.ok(sim.state.sp[side] >= 0 && sim.state.sp[side] <= SP_MAX);
     }
-    assert.ok(playerSummons > 0 && sawEnemy, `${gameMode}/${map}/${weather} starts both sides of the 1v1 match`);
-    assert.ok(sim.state.result, `${gameMode}/${map}/${weather} completes`);
+    assert.ok(playerSummons > 0 && sawEnemy, `${policy.name}/${map}/${weather} starts both sides of the 1v1 match`);
+    assert.ok(sim.state.result, `${policy.name}/${map}/${weather} completes`);
     assert.ok(sim.state.time <= MATCH_DURATION);
     assert.ok(sim.state.units.every((unit) => Number.isFinite(unit.x + unit.y + unit.hp)));
     const snapshot = sim.snapshot();
