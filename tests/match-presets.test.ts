@@ -125,7 +125,7 @@ test('malformed JSON, unsupported versions, and invalid entries block all writes
   invalidSettings.environment.map = '__proto__' as never;
   const badDocuments = [
     '{broken', 'null', '[]', '{}',
-    JSON.stringify({ version: 2, presets: [] }),
+    JSON.stringify({ version: 3, presets: [] }),
     JSON.stringify({ version: 1, presets: [], extra: true }),
     JSON.stringify({ version: 1, presets: [null] }),
     json([{ ...base, settings: invalidSettings }]),
@@ -210,8 +210,8 @@ test('selected and all exports use the versioned schema and preserve all setting
   settings.environment = { map: 'road', weather: 'rain' };
   const second = store.save('두 번째', settings);
   const writes = storage.writes;
-  assert.deepEqual(JSON.parse(store.exportJson(first.id)), { version: 1, presets: [first] });
-  assert.deepEqual(JSON.parse(store.exportJson()), { version: 1, presets: [first, second] });
+  assert.deepEqual(JSON.parse(store.exportJson(first.id)), { version: 2, presets: [{ ...first, settingsVersion: 1 }] });
+  assert.deepEqual(JSON.parse(store.exportJson()), { version: 2, presets: [first, second].map((preset) => ({ ...preset, settingsVersion: 1 })) });
   assert.equal(storage.writes, writes);
 });
 
