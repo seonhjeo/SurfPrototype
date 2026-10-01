@@ -53,7 +53,7 @@ HTTPS 앞단에서는 WebSocket 업그레이드를 `/ws`로 전달하도록 구�
 
 Vercel은 화면을 배포하고 Render의 단일 Node.js 24 프로세스가 기존 WebSocket 연결과 방·전투를 관리합니다. 서버가 입장·덱·준비·SP·소환·결과를 검증하며 각 참가자에게 자신의 덱만 전달합니다. 공개 화면은 [surf-prototype.vercel.app](https://surf-prototype.vercel.app/), 게임 서버는 `wss://surf-multiplayer.onrender.com/ws`입니다.
 
-1. 현재 Render 서비스는 대시보드에서 수동 구성했으며 `main`의 `9291655`를 배포했습니다. `Auto-Deploy=On Commit`으로 PR 병합 커밋을 자동 배포합니다. Node.js 24.19.0·Free 단일 인스턴스·Singapore 지역을 사용합니다. 저장소의 `render.yaml`은 이전 작업 브랜치 `0.3.1-private-connection-fix`를 가리키므로 현재 서비스의 배포 브랜치와 다릅니다.
+1. 현재 Render 서비스는 대시보드에서 수동 구성했으며 [PR #9](https://github.com/seonhjeo/SurfPrototype/pull/9)의 `main`·`ab8c4ae`를 배포했습니다. `Auto-Deploy=On Commit`으로 PR 병합 커밋을 자동 배포합니다. Node.js 24.19.0·Free 단일 인스턴스·Singapore 지역을 사용합니다. 저장소의 `render.yaml`은 이전 작업 브랜치 `0.3.1-private-connection-fix`를 가리키므로 현재 서비스의 배포 브랜치와 다릅니다.
 2. Build Command는 `npm ci && npm run build`, 실제 Start Command는 `npm run start`(`npm start`와 같은 스크립트), Health Check Path는 `/healthz`입니다. `server/start.mjs`는 Render가 제공한 `PORT`로 `0.0.0.0`에서 접속을 받습니다. [Render Web Service 설정](https://render.com/docs/web-services)을 참고하세요.
 3. 현재 Render의 `MULTIPLAYER_ALLOWED_ORIGINS`는 `https://surf-prototype.vercel.app`만 허용합니다. Preview에서 같은 서버를 테스트하려면 해당 출처를 정확히 추가해야 합니다.
 4. [서버 상태 확인](https://surf-multiplayer.onrender.com/healthz)은 HTTP 200과 `{"status":"ok","service":"surf-multiplayer"}`를 반환합니다. 이 경로는 방 상태나 인증 정보를 노출하지 않습니다.
@@ -66,23 +66,27 @@ Render Free는 HTTP 요청이나 기존 WebSocket의 수신 메시지가 15분 �
 
 PVP 화면은 서버 상태 사이의 좌표를 150ms 동안 보간합니다. 전투 판정·SP·소환·승패는 서버 상태를 따르고 AI 대전의 계산은 유지합니다. 최초 공개 PVP 배포에서는 2026-09-30 Node.js 24의 자동 테스트 59개와 타입 검사·프로덕션 빌드가 통과했습니다. 당시 Render와 Vercel의 `main`·`5df7f3a` 배포가 각각 Live·Ready 상태였으며, 세 모드의 공개 WebSocket 방 생성·참가·덱 비공개·전투·소환·이탈을 검증했습니다. 실제 공개 브라우저 두 탭에서도 전투·결과·재대전·상대 나가기 후 승리 화면을 확인했습니다. 서로 다른 기기·네트워크에서는 아직 검증하지 않았습니다. 배포 ID와 상세 흐름은 [공개 PVP 검증 기록](Docs/개발문서/공개PVP배포.md)에 남겼습니다.
 
-모드 설정 리팩터링 후에는 자동 테스트 95/95개·타입 검사·프로덕션 빌드를 통과했고 사용자가 로컬 테스트 완료 후 병합·배포를 요청했습니다. [PR #8](https://github.com/seonhjeo/SurfPrototype/pull/8)의 `main`·`9291655`를 Vercel Production과 Render에 같은 커밋으로 배포했습니다. 세 모드의 공개 WebSocket 규칙 공유·덱 비공개·양쪽 소환·이탈 결과와 실제 Production 브라우저 두 탭의 대전·이탈 승리·콘솔 오류 0을 확인했습니다. 현재 세 모드의 새 기능 OFF·라인 0을 유지합니다. 상세 배포 ID와 확인 범위는 [최신 Production 검증](Docs/개발문서/공개PVP배포.md#모드-설정-리팩터링-production-검증--2026-09-30)에 기록했습니다.
+모드 설정 리팩터링 후에는 자동 테스트 95/95개·타입 검사·프로덕션 빌드를 통과했고 사용자가 로컬 테스트 완료 후 병합·배포를 요청했습니다. [PR #8](https://github.com/seonhjeo/SurfPrototype/pull/8)의 `main`·`9291655`를 Vercel Production과 Render에 같은 커밋으로 배포했습니다. 세 모드의 공개 WebSocket 규칙 공유·덱 비공개·양쪽 소환·이탈 결과와 실제 Production 브라우저 두 탭의 대전·이탈 승리·콘솔 오류 0을 확인했습니다. 당시 세 모드의 새 기능 OFF·라인 0을 유지했습니다. 상세 배포 ID와 확인 범위는 [당시 Production 검증](Docs/개발문서/공개PVP배포.md#모드-설정-리팩터링-production-검증--2026-09-30)에 기록했습니다.
+
+경기 설정 팝업과 맵·날씨 선택·포탑 소유진영 SP 보상은 사용자 승인 후 [PR #9](https://github.com/seonhjeo/SurfPrototype/pull/9)로 배포했습니다. 2026-10-01 09:42 KST의 `main`·`ab8c4ae`에 [GitHub CI](https://github.com/seonhjeo/SurfPrototype/actions/runs/36797547872)가 성공했고, 같은 커밋의 Vercel Production 배포 SUCCESS와 Render Live를 확인했습니다. 공개 화면과 서버 상태 확인은 HTTP 200입니다. 공개 WebSocket에서 설정 공유·덱 비공개·포탑 소유진영 SP 지급도 확인했습니다. Production 브라우저 두 탭에서 방장 설정 공유·양쪽 소환·성채 자연 파괴·고정 환경 재대전·새 경기 초기화·참가자 이탈 승리와 콘솔 오류/경고 0을 확인했습니다. 배포 ID와 확인 범위는 [경기 설정 Production 검증](Docs/개발문서/공개PVP배포.md#경기-설정-팝업-production-검증--2026-10-01)에 기록합니다. 서로 다른 기기·네트워크·실제 휴대기기 터치는 이번 확인에 포함하지 않습니다.
 
 ## 모드 설정으로 기능 조합하기
 
-기존 세 모드는 `src/game/data.ts`의 `GAME_MODES`에서 하나의 `rules` 설정을 사용합니다. 기본값은 기존 플레이와 동일합니다. 라인은 0개이며 성채 미니언·성채 공격·포탑·SP 상자는 모두 꺼져 있습니다. 설정 구조와 초기 수치는 `src/game/mode-settings.ts`, 이동 경로는 `src/game/lanes.ts`에서 관리합니다.
+기본 규칙은 `src/game/data.ts`의 `standard.rules`를 사용하고, 경기 설정창의 입력은 `src/game/match-settings.ts`에서 검증해 공통 `ModeRules`로 변환합니다. 기본은 이동 0라인·중립 ON·미니언/성채 무기/포탑/상자 OFF이며 맵·날씨는 각각 무작위입니다. 공통 전투 스탯은 `src/game/mode-settings.ts`, 이동 경로는 `src/game/lanes.ts`에서 관리합니다.
 
 | 설정 | 역할 |
 | --- | --- |
 | `lanes.count` | 0: 자유 이동, 1~3: 라인 이동·같은 라인 전투 |
-| `neutralWaves.enabled` | 중립 몬스터·보스 소환 여부, 미니언 소환과 독립 |
-| `minions.enabled` | 라인당 일반 3마리와 매 5회 엘리트 추가 |
+| `neutralWaves.enabled`, `neutralWaves.count` | 중립 웨이브 ON/OFF, `null`은 맵 기본·숫자는 지점/진영당 일반 수량 |
+| `minions.enabled`, `minions.perLane` | 진영/이동 라인당 일반 1~10마리·매 5회 엘리트 1마리 추가 |
 | `fortAttacks.catapult.enabled`, `fortAttacks.oil.enabled` | 성채의 공격 수단을 각각 켜거나 끔 |
-| `towers.enabled` | 양 진영 라인별 전방 포탑 |
-| `spBox.enabled`, `spBox.respawnDelay` | 중앙 SP 상자, `null`이면 파괴 후 사라짐, 숫자이면 해당 초 후 재생성 |
+| `towers.enabled`, `towers.laneCount`, `towers.count` | 이동 라인과 독립된 배치 1~3라인·진영/배치 라인당 포탑 1~3개 |
+| `spBox.enabled`, `spBox.count`, `spBox.respawnDelay` | 중앙 공용 상자 1~3개, 코드의 재생성 `null`은 영구 소멸·숫자는 지연 초 |
 | `sp.initial`, `sp.maximum` | 시작 SP·보유 상한 |
 | `sp.passive` | 시간당 획득 여부·초당 획득량 |
-| `sp.summoned`, `sp.minion`, `sp.elite`, `sp.neutral` | 종류별 처치 획득 여부·고정량·배율 |
+| `sp.summoned`, `sp.minion`, `sp.elite`, `sp.neutral` | 종류별 처치 획득 여부·기본/고정량·코드 배율 |
+| `sp.towerLoss` | 공격자와 무관하게 파괴된 포탑 소유진영에 개당 한 번 지급 |
+| `MatchSettings.environment` | 맵/날씨 각각 무작위 또는 고정, 재대전은 무작위 항목만 재추첨 |
 
 보상 설정의 `amount: null`은 각 개체의 기존 보상량을 사용합니다. 숫자는 고정 보상으로 대체하며, `multiplier`를 곱합니다. `enabled: false`이면 지급하지 않습니다. `neutral`은 일반 중립과 중립 보스 모두에 적용합니다. SP 상자는 실제로 줄어든 체력에 `spPerDamage`를 곱해 지급하므로 과잉 피해로 보상이 늘어나지 않습니다.
 
@@ -104,9 +108,9 @@ const simulation = new Simulation({
 });
 ```
 
-실제 모드에 적용하려면 `GAME_MODES`의 해당 모드 `rules`를 같은 방식으로 조합합니다. 설정은 AI와 PVP의 공통 전투 계산에 적용되며, 로비의 별도 커스텀 설정 화면은 추가하지 않습니다. PVP 서버는 모드 ID로 확정한 규칙을 방 생성 시 보관하고 참가자에게 전송하며 재대전에도 유지합니다. 참가자가 보낸 임의 규칙은 적용하지 않습니다. 프런트와 게임 서버 모두 같은 코드를 배포해야 합니다.
+일반 경기는 로비에서 여는 설정창으로 맵·날씨와 기능 ON/OFF·수량/SP를 정합니다. PVP 서버는 허용된 입력을 검증해 전투 규칙은 `room.rules`, 환경 선택 정책은 `room.environmentSettings`로 저장·공유합니다. 재대전은 규칙과 고정 환경을 유지하고 무작위 환경 항목만 다시 추첨합니다. 임의 전투 스탯 재정의는 적용하지 않습니다. 프런트와 게임 서버 모두 같은 코드를 배포해야 합니다.
 
-로컬에서 새 기능을 직접 확인하려면 `npm run dev` 실행 후 `/tests/manual/mode-preview.html?lanes=3`에 접속합니다. `lanes=0`, `1`, `2`, `3`을 바꿔 확인할 수 있습니다. 이 AI 전용 검증 페이지는 시작 SP 40·상한 80, 모든 새 기능 ON·상자 15초 재생성을 사용하며 실제 세 모드의 기본값이나 Production 빌드를 변경하지 않습니다.
+로컬에서 새 기능을 직접 확인하려면 `npm run dev` 실행 후 `/tests/manual/mode-preview.html?lanes=3`에 접속합니다. `lanes=0`, `1`, `2`, `3`을 바꿔 확인할 수 있습니다. 이 AI 전용 검증 페이지는 시작 SP 40·상한 80, 모든 새 기능 ON·상자 15초 재생성을 사용하며 일반 경기의 기본값이나 Production 빌드를 변경하지 않습니다.
 
 세부 규칙과 위임된 초기 수치는 [게임 모드 기획](Docs/기획서/게임모드.md) 및 연결된 라인·미니언·구조물 문서에서 확인할 수 있습니다.
 
@@ -116,6 +120,7 @@ const simulation = new Simulation({
 | --- | --- |
 | `src/main.ts`, `src/ui.ts` | 앱 시작, 로비·대기방·경기·결과, 입력과 AI/PVP 흐름 |
 | `src/game/data.ts` | 유닛·맵·날씨·스킬과 밸런스 수치 |
+| `src/game/match-settings.ts`, `src/match-settings-dialog.ts` | 경기 설정 검증·환경 선택과 설정/확인 팝업 |
 | `src/game/simulation.ts` | 브라우저·서버 공용 전투 계산과 AI |
 | `src/game/BattleScene.ts` | 연속 좌표 전장과 유닛·성채·효과 렌더링 |
 | `src/network.ts`, `server/` | WebSocket 연결, 비공개 방, 서버 전투 판정과 상태 전달 |
@@ -152,7 +157,7 @@ Vercel 설정은 다음 값을 사용합니다.
 
 Vercel에서 이 저장소를 Import하고 Git 연동을 유지하면 다음 흐름으로 테스트합니다.
 
-Vercel에는 정적 프런트엔드를 배포하고 비공개 PVP 연결은 Render 서버의 `/ws`로 전달합니다. 2026-09-30 Production 재배포와 공개 브라우저 두 탭의 대전·재대전을 검증했습니다. 현재 Render 서버는 Production 출처만 허용합니다.
+Vercel에는 정적 프런트엔드를 배포하고 비공개 PVP 연결은 Render 서버의 `/ws`로 전달합니다. 2026-10-01 `main`·`ab8c4ae`의 Production 배포와 공개 브라우저 두 탭의 대전·재대전을 확인했습니다. 현재 Render 서버는 Production 출처만 허용합니다.
 
 1. 최신 `dev`에서 새 개발 브랜치를 만들고 구현·검증합니다.
 2. 구현 후 로컬 서버를 실행하고 브라우저를 팝업해 사용자가 직접 테스트하도록 합니다.
