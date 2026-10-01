@@ -57,7 +57,7 @@ HTTPS 앞단에서는 WebSocket 업그레이드를 `/ws`로 전달하도록 구�
 
 Vercel은 화면을 배포하고 Render의 단일 Node.js 24 프로세스가 기존 WebSocket 연결과 방·전투를 관리합니다. 서버가 입장·덱·준비·SP·소환·결과를 검증하며 각 참가자에게 자신의 덱만 전달합니다. 공개 화면은 [surf-prototype.vercel.app](https://surf-prototype.vercel.app/), 게임 서버는 `wss://surf-multiplayer.onrender.com/ws`입니다.
 
-1. 현재 Render 서비스는 대시보드에서 수동 구성했으며 [PR #11](https://github.com/seonhjeo/SurfPrototype/pull/11)의 `main`·`de8b603`을 배포했습니다. `Auto-Deploy=On Commit`으로 PR 병합 커밋을 자동 배포합니다. Node.js 24.19.0·Free 단일 인스턴스·Singapore 지역을 사용합니다. 저장소의 `render.yaml`은 이전 작업 브랜치 `0.3.1-private-connection-fix`를 가리키므로 현재 서비스의 배포 브랜치와 다릅니다.
+1. 현재 Render 서비스는 대시보드에서 수동 구성했으며 [PR #12](https://github.com/seonhjeo/SurfPrototype/pull/12)의 `main`·`0293a4b`을 배포했습니다. `Auto-Deploy=On Commit`으로 PR 병합 커밋을 자동 배포합니다. Node.js 24.19.0·Free 단일 인스턴스·Singapore 지역을 사용합니다. 저장소의 `render.yaml`은 이전 작업 브랜치 `0.3.1-private-connection-fix`를 가리키므로 현재 서비스의 배포 브랜치와 다릅니다.
 2. Build Command는 `npm ci && npm run build`, 실제 Start Command는 `npm run start`(`npm start`와 같은 스크립트), Health Check Path는 `/healthz`입니다. `server/start.mjs`는 Render가 제공한 `PORT`로 `0.0.0.0`에서 접속을 받습니다. [Render Web Service 설정](https://render.com/docs/web-services)을 참고하세요.
 3. 현재 Render의 `MULTIPLAYER_ALLOWED_ORIGINS`는 `https://surf-prototype.vercel.app`만 허용합니다. Preview에서 같은 서버를 테스트하려면 해당 출처를 정확히 추가해야 합니다.
 4. [서버 상태 확인](https://surf-multiplayer.onrender.com/healthz)은 HTTP 200과 `{"status":"ok","service":"surf-multiplayer"}`를 반환합니다. 이 경로는 방 상태나 인증 정보를 노출하지 않습니다.
@@ -77,6 +77,8 @@ PVP 화면은 서버 상태 사이의 좌표를 150ms 동안 보간합니다. �
 SP 초과 보유는 사용자 명시 병합·배포 요청에 따라 [PR #10](https://github.com/seonhjeo/SurfPrototype/pull/10)으로 배포했습니다. 2026-10-01 11:31 KST의 `main`·`7b61b6f`에 [GitHub CI](https://github.com/seonhjeo/SurfPrototype/actions/runs/36806248333)가 성공했고, 같은 커밋의 Vercel Production 성공과 Render 배포 성공·Live 로그, 공개 화면·서버 상태 HTTP 200을 확인했습니다. 공개 WebSocket에서 상자 보상으로 69 SP를 보유·유지하고 30 SP 소비 후 39→40으로 자동 획득이 재개됨을 확인했습니다. 자동 획득 OFF는 67 SP를 유지하고 소비 후 37 SP에서도 증가하지 않았습니다. 공개 브라우저에서는 새 SP 도움말과 콘솔 오류/경고 0을 확인했습니다. 이번 공개 브라우저 경기는 실행하지 않았으며, 로컬 AI/PVP 검증과 [SP Production 검증](Docs/개발문서/공개PVP배포.md#sp-초과-보유-production-검증--2026-10-01)의 확인 범위를 구분합니다.
 
 로컬 설정 프리셋과 JSON 가져오기·내보내기는 사용자 명시 병합·배포 요청에 따라 [PR #11](https://github.com/seonhjeo/SurfPrototype/pull/11)로 배포했습니다. 2026-10-01 12:57 KST의 `main`·`de8b603`에 [GitHub CI](https://github.com/seonhjeo/SurfPrototype/actions/runs/36812909259)가 성공했고 같은 커밋의 Vercel Production Ready·Render 배포 성공/Live 로그와 공개 화면·서버 상태 HTTP 200을 확인했습니다. 공개 브라우저에서 실제 JSON 가져오기·동명이름 번호 추가·새로고침 후 프리셋 복원, 두 탭 PVP 설정 공유·양쪽 소환·42초 성채 자연 파괴·재대전 설정 유지와 새 경기 초기화·참가자 이탈 승리·콘솔 오류/경고 0을 확인했습니다. 배포 전 자동 테스트 140개·로컬 AI/PVP·Chrome 파일 다운로드와 이번 [프리셋 Production 검증](Docs/개발문서/공개PVP배포.md#로컬-설정-프리셋-production-검증--2026-10-01)을 구분합니다. 이번 공개 사이트의 실제 다운로드·실제 기기/외부 네트워크/터치·브라우저 재시작·장기 밸런스는 확인하지 않았으며 사용자 로컬 테스트 수행 보고가 있었다고 해석하지 않습니다.
+
+프리셋 버전 변환은 후속 main PR·배포 요청으로 [PR #12](https://github.com/seonhjeo/SurfPrototype/pull/12)를 2026-10-01 14:23 KST에 병합했습니다. 최종 `dev`·`63b10ef`에서 Node.js 24.19.0의 전체 테스트 154개와 타입 검사 포함 빌드를 통과했고, `main`·`0293a4b`의 [GitHub CI](https://github.com/seonhjeo/SurfPrototype/actions/runs/36819515799) SUCCESS와 동일 커밋의 Vercel Production Ready를 확인했습니다. 공개 프리셋의 기존 v1 유지·JSON 가져오기·37 SP 덮어쓰기 후 새로고침 복원·미래 버전 거부와 Chrome의 실제 1,542바이트 v2 JSON 다운로드를 확인했습니다. Render 첫 배포는 내부 상태 확인 시간 초과로 실패했으나 같은 커밋·설정의 한 번 재시도로 Live를 확인했습니다. 공개 AI의 27초 자연 종료·재대전·새 경기 소환, 두 클라이언트 PVP의 45초 자연 종료와 일치한 승패·재대전 설정 유지/새 경기 초기화·참가자 이탈 승리와 모든 콘솔 오류/경고 0을 확인하고 테스트 방과 연결을 정리했습니다. [최신 배포 증거](Docs/개발문서/공개PVP배포.md#프리셋-버전-변환-production-검증--2026-10-01)에 실제 결과를 기록하고, 앞선 32개 부분 검증·PR #11의 140개 검증과 구분합니다. 사용자 로컬 테스트 완료 보고가 있었다고 해석하지 않습니다.
 
 ## 모드 설정으로 기능 조합하기
 
@@ -167,7 +169,7 @@ Vercel 설정은 다음 값을 사용합니다.
 
 Vercel에서 이 저장소를 Import하고 Git 연동을 유지하면 다음 흐름으로 테스트합니다.
 
-Vercel에는 정적 프런트엔드를 배포하고 비공개 PVP 연결은 Render 서버의 `/ws`로 전달합니다. 2026-10-01 최신 `main`·`de8b603`의 동일 커밋 Production 배포와 공개 프리셋 가져오기·비공개 방 설정 공유·대전·재대전·이탈 승리를 확인했습니다. 현재 Render 서버는 Production 출처만 허용합니다.
+Vercel에는 정적 프런트엔드를 배포하고 비공개 PVP 연결은 Render 서버의 `/ws`로 전달합니다. 최신 `main`·`0293a4b`의 Vercel Production Ready·Render Live와 공개 프리셋 동작을 확인했습니다. Render 첫 기동 시간 초과 후 같은 커밋·설정으로 한 번 재시도해 성공했으며 배포 후 공개 AI/PVP의 자연 종료·재대전·이탈 검증도 통과했습니다. 양 플랫폼의 이전 `de8b603` 배포와 공개 대전 결과는 당시 증거로 보존합니다. 현재 Render 서버는 Production 출처만 허용합니다.
 
 1. 최신 `dev`에서 새 개발 브랜치를 만들고 구현한 기능과 변경 영향 범위만 검증합니다.
 2. 구현 후 로컬 서버를 실행하고 브라우저를 팝업해 사용자가 직접 테스트하도록 합니다.
