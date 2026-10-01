@@ -1,14 +1,14 @@
 # 공개 PVP 배포 개발단위
 
 대응 기획: [로비의 비공개 방과 방 수명](../기획서/화면구성.md), [경기 설정의 비공개 PVP](../기획서/게임모드.md).
-Vercel 화면과 Render 단일 WebSocket 서버로 서로 다른 기기의 비공개 PVP를 제공한다. 로그인·6자리 코드·서버 전투 판정·덱 비공개·설정 공유·이탈·재대전 규칙을 유지한다. 날짜별 기록은 당시 구현과 확인 범위의 증거로 보존한다. 2026-10-01에는 경기 설정 팝업·환경 선택·포탑 소유진영 SP 보상에 이어 SP 초과 보유를 공개 배포했다.
-최신 PR #10의 동일 main 커밋을 Vercel Production·Render에 배포하고 공개 WebSocket의 초과 SP 보존·소비 후 회복 재개/회복 OFF를 확인했다. 공개 브라우저 경기는 PR #9 당시 두 탭 검증과 구분하며 서로 다른 기기·네트워크 검증은 미확인이다.
+Vercel 화면과 Render 단일 WebSocket 서버로 서로 다른 기기의 비공개 PVP를 제공한다. 로그인·6자리 코드·서버 전투 판정·덱 비공개·설정 공유·이탈·재대전 규칙을 유지한다. 날짜별 기록은 당시 구현과 확인 범위의 증거로 보존한다. 2026-10-01에는 경기 설정 팝업·환경 선택·포탑 소유진영 SP 보상·SP 초과 보유에 이어 로컬 설정 프리셋과 JSON 가져오기·내보내기를 공개 배포했다.
+최신 [PR #11](https://github.com/seonhjeo/SurfPrototype/pull/11)의 동일 main 커밋을 Vercel Production·Render에 배포하고 공개 브라우저에서 JSON 가져오기·동명이름 추가·새로고침 후 복원·비공개 방의 설정 공유·양쪽 소환·자연 종료·재대전 초기화·이탈 승리를 확인했다. 서로 다른 기기·네트워크 검증은 미확인이다.
 
 ## Render 단일 WebSocket 서버 배포
 
 - 기획: [비공개 방과 초대 코드](../기획서/화면구성.md#로비), [방 수명](../기획서/화면구성.md#방-수명과-오류-처리--2026-09-30-확정).
 - 기존 `server/start.mjs`와 `server/multiplayer.mjs`를 Node.js 24.19.0의 단일 프로세스에서 실행한다. 방과 전투 상태를 메모리에서 공유하므로 복수 인스턴스로 나누지 않는다.
-- 현재 서비스는 Render 대시보드에서 수동 구성한 Singapore 지역 Free 단일 Web Service이며 PR #10의 `main`·`7b61b6f`를 배포했다. `Auto-Deploy=On Commit`으로 main 커밋을 자동 반영한다. `render.yaml`의 브랜치는 이전 작업 브랜치 `0.3.1-private-connection-fix`로 현재 서비스 설정과 다르다.
+- 현재 서비스는 Render 대시보드에서 수동 구성한 Singapore 지역 Free 단일 Web Service이며 PR #11의 `main`·`de8b603`을 배포했다. `Auto-Deploy=On Commit`으로 main 커밋을 자동 반영한다. `render.yaml`의 브랜치는 이전 작업 브랜치 `0.3.1-private-connection-fix`로 현재 서비스 설정과 다르다.
 - 실제 빌드는 `npm ci && npm run build`, 시작은 `npm run start`, `NODE_VERSION=24.19.0`, 상태 확인은 `/healthz`다. Render가 제공한 `PORT`를 사용해 `0.0.0.0`에서 접속을 받는다.
 - `MULTIPLAYER_ALLOWED_ORIGINS=https://surf-prototype.vercel.app`로 Production 출처만 허용한다. Preview 검증은 해당 출처를 별도로 추가해야 한다.
 - `/healthz`의 정상 응답과 `/ws`의 WebSocket 연결을 확인한다. 상태 확인 응답에 방·덱·인증 정보를 넣지 않는다.
@@ -70,5 +70,18 @@ Vercel 화면과 Render 단일 WebSocket 서버로 서로 다른 기기의 비�
 - 각 시점 양 클라이언트의 서버 SP 스냅샷이 일치하고 상대 덱은 비공개였으며 오류는 0건이었다. 참가자 이탈 후 방장 승리를 확인하고 생성한 테스트 방·연결을 모두 정리했다.
 - 실제 Production 브라우저에서 자동 SP 획득 도움말의 `50 미만 회복·다른 보상 50 초과 가능` 안내와 콘솔 오류/경고 0건을 확인했다. 이번 공개 브라우저의 실제 경기는 실행하지 않았으며 AI/PVP 경기·375×667 초과 SP HUD 확인은 배포 전 로컬 브라우저 검증이다.
 - 서로 다른 기기·네트워크, 실제 휴대기기 터치·사용자 로컬 테스트의 수행 여부와 장기 사용자 밸런스는 확인하지 않았다. 전체 54개 개발단위 중 53개 완료이며 실제 사용자 밸런스 단위는 미완료로 유지한다. 앞선 공개 배포 기록은 당시 증거로 보존한다.
+
+## 로컬 설정 프리셋 Production 검증 — 2026-10-01
+
+- 사용자의 명시적인 `dev` push·`main` PR 병합·배포 요청에 따라 [PR #11](https://github.com/seonhjeo/SurfPrototype/pull/11)을 2026-10-01 12:57:51 KST에 병합했다. Production 커밋은 `de8b6035872cde468794f9193def8a0c80e5c50c`다. 사용자 로컬 테스트 수행 보고가 있었다고 해석하지 않는다.
+- [PR의 GitHub CI](https://github.com/seonhjeo/SurfPrototype/actions/runs/36812847496)와 Vercel Preview가 SUCCESS였고, 병합 뒤 [main의 GitHub CI](https://github.com/seonhjeo/SurfPrototype/actions/runs/36812909259)는 12:58:10 KST에 SUCCESS다. 배포 전 Node.js 24.19의 자동 테스트 140/140개·타입 검사·빌드는 [구현 당시 검증](로컬설정프리셋.md#로컬-설정-프리셋-구현-검증--2026-10-01)이며 이번 Production 검증과 구분한다.
+- [Vercel 배포 `HRQxbp9k5J5DoTY5cgUDHsNYvpuM`](https://vercel.com/hoya14/surf-prototype/HRQxbp9k5J5DoTY5cgUDHsNYvpuM)은 위 main SHA의 Production·Latest·Ready다. GitHub 배포 `6775806642`는 12:58:03 KST에 SUCCESS였으며 [고정 공개 URL](https://surf-prototype.vercel.app/)은 HTTP 200이다. [고유 배포 URL](https://surf-prototype-npc50m93r-hoya14.vercel.app)도 확인했다.
+- Render 서비스 `srv-daubkvdg1s2s73c9ouk0`의 [배포 `dep-dautkg5g1s2s73d1prvg`](https://dashboard.render.com/web/srv-daubkvdg1s2s73c9ouk0/deploys/dep-dautkg5g1s2s73d1prvg)는 Auto-Deploy로 같은 main SHA를 반영해 40.3초 뒤 `Deploy succeeded`와 `Your service is live` 로그를 확인했다. 완료 시각은 12:58:33 KST이며 [서버 상태 확인](https://surf-multiplayer.onrender.com/healthz)은 HTTP 200·정상 JSON 응답이다.
+- 실제 공개 브라우저에서 처음 저장 목록이 비어 있음을 확인한 뒤 기존 JSON 파일을 가져왔다. 같은 파일을 반복해 가져오면 `숲 비 20SP (2)`를 추가했으며 새로고침 후 숲·비·시작 20 SP 프리셋을 불러와 복원했다.
+- 공개 방 `130321`을 만들고 다른 탭에서 참가했다. 양쪽의 읽기 전용 전체 설정이 같았으며 양쪽 유닛 선택·준비·소환 후 소비한 SP 15 표시를 확인했다.
+- 경기 경과 `00:42`에 방장 성채 0·참가자 성채 575 HP로 자연 종료했고 양쪽 패배/승리 결과가 일치했다. 양쪽 재대전 선택 뒤 최초 설정과 양쪽 읽기 전용 설정이 모두 같음을 확인했다.
+- 새 덱 선택·준비로 시작한 재대전은 표시 시간 `04:59`·양 성채 1,000 HP·SP 20으로 초기화됐다. 참가자가 `나가기`를 누른 뒤 방장의 승리·상대 이탈 사유를 확인했다. 방장은 로비로 복귀하고 참가자 탭을 닫아 테스트 방과 연결을 정리했다.
+- 두 탭의 콘솔 오류·경고는 0건이며 공개 화면 증거는 `/tmp/surf-presets-production.png`다. 이번 공개 사이트에서 파일 내보내기의 실제 다운로드는 재실행하지 않았다. 내보내기는 배포 전 로컬 Chrome의 1,515바이트 JSON 다운로드/가져오기 및 자동 테스트의 선택/전체 내보내기로 검증했다.
+- 확인 범위는 한 브라우저의 독립된 두 탭과 공개 서버 연결이다. 서로 다른 기기·네트워크, 실제 기기 터치·한국어 IME·브라우저 재시작·장기 사용자 밸런스·사용자 로컬 테스트 수행 여부는 확인하지 않았다. 전체 58개 중 57개 개발 완료이며 실제 사용자 밸런스 단위는 미완료로 유지한다.
 
 [README의 배포 절차](../../README.md#render-websocket-서버-배포) · [Render Web Service 설정](https://render.com/docs/web-services) · [개발문서 인덱스](index.md)

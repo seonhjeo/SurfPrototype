@@ -55,7 +55,7 @@ HTTPS 앞단에서는 WebSocket 업그레이드를 `/ws`로 전달하도록 구�
 
 Vercel은 화면을 배포하고 Render의 단일 Node.js 24 프로세스가 기존 WebSocket 연결과 방·전투를 관리합니다. 서버가 입장·덱·준비·SP·소환·결과를 검증하며 각 참가자에게 자신의 덱만 전달합니다. 공개 화면은 [surf-prototype.vercel.app](https://surf-prototype.vercel.app/), 게임 서버는 `wss://surf-multiplayer.onrender.com/ws`입니다.
 
-1. 현재 Render 서비스는 대시보드에서 수동 구성했으며 [PR #10](https://github.com/seonhjeo/SurfPrototype/pull/10)의 `main`·`7b61b6f`를 배포했습니다. `Auto-Deploy=On Commit`으로 PR 병합 커밋을 자동 배포합니다. Node.js 24.19.0·Free 단일 인스턴스·Singapore 지역을 사용합니다. 저장소의 `render.yaml`은 이전 작업 브랜치 `0.3.1-private-connection-fix`를 가리키므로 현재 서비스의 배포 브랜치와 다릅니다.
+1. 현재 Render 서비스는 대시보드에서 수동 구성했으며 [PR #11](https://github.com/seonhjeo/SurfPrototype/pull/11)의 `main`·`de8b603`을 배포했습니다. `Auto-Deploy=On Commit`으로 PR 병합 커밋을 자동 배포합니다. Node.js 24.19.0·Free 단일 인스턴스·Singapore 지역을 사용합니다. 저장소의 `render.yaml`은 이전 작업 브랜치 `0.3.1-private-connection-fix`를 가리키므로 현재 서비스의 배포 브랜치와 다릅니다.
 2. Build Command는 `npm ci && npm run build`, 실제 Start Command는 `npm run start`(`npm start`와 같은 스크립트), Health Check Path는 `/healthz`입니다. `server/start.mjs`는 Render가 제공한 `PORT`로 `0.0.0.0`에서 접속을 받습니다. [Render Web Service 설정](https://render.com/docs/web-services)을 참고하세요.
 3. 현재 Render의 `MULTIPLAYER_ALLOWED_ORIGINS`는 `https://surf-prototype.vercel.app`만 허용합니다. Preview에서 같은 서버를 테스트하려면 해당 출처를 정확히 추가해야 합니다.
 4. [서버 상태 확인](https://surf-multiplayer.onrender.com/healthz)은 HTTP 200과 `{"status":"ok","service":"surf-multiplayer"}`를 반환합니다. 이 경로는 방 상태나 인증 정보를 노출하지 않습니다.
@@ -73,6 +73,8 @@ PVP 화면은 서버 상태 사이의 좌표를 150ms 동안 보간합니다. �
 경기 설정 팝업과 맵·날씨 선택·포탑 소유진영 SP 보상은 사용자 승인 후 [PR #9](https://github.com/seonhjeo/SurfPrototype/pull/9)로 배포했습니다. 2026-10-01 09:42 KST의 `main`·`ab8c4ae`에 [GitHub CI](https://github.com/seonhjeo/SurfPrototype/actions/runs/36797547872)가 성공했고, 같은 커밋의 Vercel Production 배포 SUCCESS와 Render Live를 확인했습니다. 공개 화면과 서버 상태 확인은 HTTP 200입니다. 공개 WebSocket에서 설정 공유·덱 비공개·포탑 소유진영 SP 지급도 확인했습니다. Production 브라우저 두 탭에서 방장 설정 공유·양쪽 소환·성채 자연 파괴·고정 환경 재대전·새 경기 초기화·참가자 이탈 승리와 콘솔 오류/경고 0을 확인했습니다. 배포 ID와 확인 범위는 [경기 설정 Production 검증](Docs/개발문서/공개PVP배포.md#경기-설정-팝업-production-검증--2026-10-01)에 기록합니다. 서로 다른 기기·네트워크·실제 휴대기기 터치는 이번 확인에 포함하지 않습니다.
 
 SP 초과 보유는 사용자 명시 병합·배포 요청에 따라 [PR #10](https://github.com/seonhjeo/SurfPrototype/pull/10)으로 배포했습니다. 2026-10-01 11:31 KST의 `main`·`7b61b6f`에 [GitHub CI](https://github.com/seonhjeo/SurfPrototype/actions/runs/36806248333)가 성공했고, 같은 커밋의 Vercel Production 성공과 Render 배포 성공·Live 로그, 공개 화면·서버 상태 HTTP 200을 확인했습니다. 공개 WebSocket에서 상자 보상으로 69 SP를 보유·유지하고 30 SP 소비 후 39→40으로 자동 획득이 재개됨을 확인했습니다. 자동 획득 OFF는 67 SP를 유지하고 소비 후 37 SP에서도 증가하지 않았습니다. 공개 브라우저에서는 새 SP 도움말과 콘솔 오류/경고 0을 확인했습니다. 이번 공개 브라우저 경기는 실행하지 않았으며, 로컬 AI/PVP 검증과 [SP Production 검증](Docs/개발문서/공개PVP배포.md#sp-초과-보유-production-검증--2026-10-01)의 확인 범위를 구분합니다.
+
+로컬 설정 프리셋과 JSON 가져오기·내보내기는 사용자 명시 병합·배포 요청에 따라 [PR #11](https://github.com/seonhjeo/SurfPrototype/pull/11)로 배포했습니다. 2026-10-01 12:57 KST의 `main`·`de8b603`에 [GitHub CI](https://github.com/seonhjeo/SurfPrototype/actions/runs/36812909259)가 성공했고 같은 커밋의 Vercel Production Ready·Render 배포 성공/Live 로그와 공개 화면·서버 상태 HTTP 200을 확인했습니다. 공개 브라우저에서 실제 JSON 가져오기·동명이름 번호 추가·새로고침 후 프리셋 복원, 두 탭 PVP 설정 공유·양쪽 소환·42초 성채 자연 파괴·재대전 설정 유지와 새 경기 초기화·참가자 이탈 승리·콘솔 오류/경고 0을 확인했습니다. 배포 전 자동 테스트 140개·로컬 AI/PVP·Chrome 파일 다운로드와 이번 [프리셋 Production 검증](Docs/개발문서/공개PVP배포.md#로컬-설정-프리셋-production-검증--2026-10-01)을 구분합니다. 이번 공개 사이트의 실제 다운로드·실제 기기/외부 네트워크/터치·브라우저 재시작·장기 밸런스는 확인하지 않았으며 사용자 로컬 테스트 수행 보고가 있었다고 해석하지 않습니다.
 
 ## 모드 설정으로 기능 조합하기
 
@@ -162,7 +164,7 @@ Vercel 설정은 다음 값을 사용합니다.
 
 Vercel에서 이 저장소를 Import하고 Git 연동을 유지하면 다음 흐름으로 테스트합니다.
 
-Vercel에는 정적 프런트엔드를 배포하고 비공개 PVP 연결은 Render 서버의 `/ws`로 전달합니다. 2026-10-01 `main`·`ab8c4ae`의 Production 배포와 공개 브라우저 두 탭의 대전·재대전을 확인했습니다. 현재 Render 서버는 Production 출처만 허용합니다.
+Vercel에는 정적 프런트엔드를 배포하고 비공개 PVP 연결은 Render 서버의 `/ws`로 전달합니다. 2026-10-01 최신 `main`·`de8b603`의 동일 커밋 Production 배포와 공개 프리셋 가져오기·비공개 방 설정 공유·대전·재대전·이탈 승리를 확인했습니다. 현재 Render 서버는 Production 출처만 허용합니다.
 
 1. 최신 `dev`에서 새 개발 브랜치를 만들고 구현·검증합니다.
 2. 구현 후 로컬 서버를 실행하고 브라우저를 팝업해 사용자가 직접 테스트하도록 합니다.
