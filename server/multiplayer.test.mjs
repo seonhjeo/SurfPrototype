@@ -180,6 +180,43 @@ test('authoritative tower loss SP reaches both clients and pays only the destroy
   assert.deepEqual(elapsed.state.sp, { player: 19, enemy: 10 }, 'later updates never award the same tower twice');
 });
 
+for (const passive of [false, true]) test(`SP overflow survives authoritative updates and spending with passive income ${passive ? 'ON' : 'OFF'}`, async (t) => {
+  const f = await fixture(t, {
+    createSimulation(configuration) {
+      const simulation = new Simulation(configuration);
+      const tower = simulation.state.structures.find((entity) => entity.kind === 'tower' && entity.side === 'player');
+      tower.burn = { sourceSide: 'neutral', damage: 1000, expiresAt: 1, nextTickAt: FIXED_STEP };
+      simulation.update(FIXED_STEP);
+      return simulation;
+    },
+  });
+  const settings = createMatchSettings();
+  settings.startingSp.amount = 50; settings.passiveSp.enabled = passive;
+  settings.neutralWaves.enabled = false;
+  settings.towers.enabled = true; settings.towerLossReward = { enabled: true, amount: 9 };
+  const { host, guest } = await pair(f, [hostDeck, guestDeck], settings);
+  await start(host, guest);
+  for (const client of [host, guest]) {
+    const initial = await waitFor(client, (message) => message.type === 'battle');
+    assert.deepEqual(initial.state.sp, { player: 59, enemy: 50 });
+    const later = await waitFor(client, (message) => message.type === 'battle' && message.state.time >= 0.2);
+    assert.deepEqual(later.state.sp, initial.state.sp, 'overflow is preserved and passive income stops at or above the limit');
+  }
+  const above = await request(host, { type: 'summon', unitId: 'warrior' },
+    (message) => message.type === 'battle' && message.state.units.filter((unit) => unit.side === 'player').length === 1);
+  assert.equal(above.state.sp.player, 54, 'spending subtracts the cost from the full overflow balance');
+  const held = await waitFor(guest, (message) => message.type === 'battle' && message.state.time >= above.state.time + 0.2);
+  assert.deepEqual(held.state.sp, { player: 54, enemy: 50 });
+  const below = await request(host, { type: 'summon', unitId: 'warrior' },
+    (message) => message.type === 'battle' && message.state.units.filter((unit) => unit.side === 'player').length === 2);
+  const resumed = await waitFor(host, (message) => message.type === 'battle' && message.state.time >= below.state.time + 0.2);
+  if (passive) assert.ok(resumed.state.sp.player > 49 && resumed.state.sp.player < 50, 'income resumes only below the limit');
+  else assert.equal(resumed.state.sp.player, 49, 'OFF remains OFF after spending');
+  assert.equal(resumed.state.sp.enemy, 50);
+  const shared = await waitFor(guest, (message) => message.type === 'battle' && message.state.time === resumed.state.time);
+  assert.deepEqual(shared.state.sp, resumed.state.sp, 'both clients receive identical authoritative balances');
+});
+
 test('private room validates codes and capacity, starts on readiness, and keeps opponent deck private', async (t) => {
   const f = await fixture(t);
   const host = await f.client();

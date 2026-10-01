@@ -1,8 +1,10 @@
 import { MAPS } from './data.ts';
 import type { MapId, ModeRules } from './data.ts';
 
-export const spRecovery = (rules: ModeRules): string => rules.sp.passive.enabled && rules.sp.passive.amount > 0
-  ? `+${rules.sp.passive.amount} / 초` : '자동 획득 없음';
+export function spRecovery(rules: ModeRules, currentSp?: number): string {
+  if (!rules.sp.passive.enabled || rules.sp.passive.amount <= 0) return '자동 획득 없음';
+  return currentSp !== undefined && currentSp >= rules.sp.maximum ? '자동 획득 정지' : `+${rules.sp.passive.amount} / 초`;
+}
 
 export function killSpRule(rules: ModeRules): string {
   const rewards = [rules.sp.summoned, rules.sp.neutral];
@@ -11,7 +13,7 @@ export function killSpRule(rules: ModeRules): string {
   return enabled.every(Boolean) ? '처치 SP 획득' : enabled.some(Boolean) ? '처치 SP 종류별 적용' : '처치 SP 없음';
 }
 
-export const spRules = (rules: ModeRules): string => `시작 ${Math.min(rules.sp.initial, rules.sp.maximum)} SP · ${spRecovery(rules)} · ${killSpRule(rules)}`;
+export const spRules = (rules: ModeRules): string => `시작 ${rules.sp.initial} SP · ${spRecovery(rules)} · ${killSpRule(rules)}`;
 
 export function featureRules(rules: ModeRules): string {
   const features: string[] = [];
@@ -42,7 +44,7 @@ export function matchRuleDetails(rules: ModeRules): [string, string][] {
     ['포탑 배치 라인', rules.towers.enabled ? `${rules.towers.laneCount}개 · 이동 라인과 별개` : 'OFF'],
     ['라인당 포탑 수', rules.towers.enabled ? `${rules.towers.count}개 · 진영당 총 ${rules.towers.laneCount * rules.towers.count}개` : 'OFF'],
     ['SP 상자', rules.spBox.enabled ? `중앙 ${rules.spBox.count}개` : 'OFF'],
-    ['시작 SP', `${rules.sp.initial} SP`], ['최대 보유 SP', `${rules.sp.maximum} SP`],
+    ['시작 SP', `${rules.sp.initial} SP`], ['자동 획득 한도', `${rules.sp.maximum} SP · 보상은 한도 초과 가능`],
     ['SP 자동 획득', spRecovery(rules)],
     ['소환 유닛 처치 보상', reward(rules.sp.summoned)], ['일반 미니언 처치 보상', reward(rules.sp.minion)],
     ['엘리트 미니언 처치 보상', reward(rules.sp.elite)], ['중립 몬스터 처치 보상', reward(rules.sp.neutral)],
