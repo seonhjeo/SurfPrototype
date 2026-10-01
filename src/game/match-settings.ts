@@ -41,8 +41,8 @@ export interface MatchSettingDefinition {
 
 // The form and server share the same allowed quantities. Combat stats stay in mode-settings.ts.
 export const MATCH_SETTING_DEFINITIONS: readonly MatchSettingDefinition[] = [
-  { key: 'startingSp', section: 'SP 획득', label: '시작 SP', help: '양 진영이 처음 보유하는 SP · 최대 보유량 50', field: 'amount', unit: 'SP', min: 1, max: 50, step: 1 },
-  { key: 'passiveSp', section: 'SP 획득', label: 'SP 자동 획득', help: '매초 획득하는 SP', field: 'amount', unit: 'SP / 초', min: 0.1, max: 50, step: 0.1 },
+  { key: 'startingSp', section: 'SP 획득', label: '시작 SP', help: '양 진영이 처음 보유하는 SP · 시작량 1~50', field: 'amount', unit: 'SP', min: 1, max: 50, step: 1 },
+  { key: 'passiveSp', section: 'SP 획득', label: 'SP 자동 획득', help: '보유 SP가 50 미만일 때만 회복 · 다른 보상은 50 초과 가능', field: 'amount', unit: 'SP / 초', min: 0.1, max: 50, step: 0.1 },
   { key: 'summonedReward', section: 'SP 획득', label: '소환 유닛 처치 보상', help: '상대가 소환한 유닛 한 명당 SP', field: 'amount', unit: 'SP', min: 1, max: 50, step: 1, defaultLabel: '유닛별 기본 보상', fallback: 2 },
   { key: 'minionReward', section: 'SP 획득', label: '일반 미니언 처치 보상', help: '상대 성채의 일반 미니언 한 마리당 SP', field: 'amount', unit: 'SP', min: 1, max: 50, step: 1 },
   { key: 'eliteReward', section: 'SP 획득', label: '엘리트 미니언 처치 보상', help: '상대 성채의 엘리트 미니언 한 마리당 SP', field: 'amount', unit: 'SP', min: 1, max: 50, step: 1 },

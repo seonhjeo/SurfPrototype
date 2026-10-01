@@ -60,7 +60,7 @@ interface UnitPosition { lane: number | null; progress: number; entering: boolea
 function checkState(state: BattleState, previous: Map<number, UnitPosition>, label: string): void {
   finite(state, label);
   for (const side of ['player', 'enemy'] as const) {
-    assert.ok(state.sp[side] >= 0 && state.sp[side] <= state.rules.sp.maximum, `${label}/${side} obeys custom SP cap`);
+    assert.ok(state.sp[side] >= 0, `${label}/${side} retains nonnegative SP including rewards above the passive cap`);
     assert.ok(state.forts[side].hp >= 0 && state.forts[side].hp <= state.forts[side].maxHp);
   }
   const routes = getLaneRoutes(state.rules.lanes.count);
@@ -102,6 +102,7 @@ for (const [index, scenario] of scenarios.entries()) {
   test(`all features complete player vs AI: ${scenario.lanes} lanes/${scenario.map}/${scenario.weather}/${scenario.economy}`, () => {
     const simulation = new Simulation(options(scenario, index));
     const initial = simulation.snapshot();
+    assert.deepEqual(initial.sp, { player: 50, enemy: 50 }, 'configured starting SP is preserved above the passive maximum of 37');
     assert.equal(initial.structures.filter((entity) => entity.kind === 'tower').length, 2 * initial.rules.towers.laneCount * initial.rules.towers.count);
     assert.ok(initial.structures.some((entity) => entity.kind === 'sp-box'));
     const previous = new Map<number, UnitPosition>();

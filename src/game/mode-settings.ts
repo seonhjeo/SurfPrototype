@@ -8,7 +8,9 @@ export interface ModeRules {
   towers: { enabled: boolean; count: number; laneCount: number; hp: number; damage: number; range: number; interval: number; radius: number; progress: number };
   spBox: { enabled: boolean; count: number; hp: number; radius: number; interactionRadius: number; spPerDamage: number; respawnDelay: number | null };
   sp: {
-    initial: number; maximum: number;
+    initial: number;
+    /** Passive income limit; rewards and existing SP may exceed it. */
+    maximum: number;
     passive: { enabled: boolean; amount: number };
     towerLoss: { enabled: boolean; amount: number };
     summoned: RewardRule; minion: RewardRule; elite: RewardRule; neutral: RewardRule;
