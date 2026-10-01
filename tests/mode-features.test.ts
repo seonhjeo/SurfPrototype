@@ -268,8 +268,8 @@ test('towers select nearby enemy units across movement lanes', () => {
   assert.ok(sim.state.structures.some((tower) => tower.side === 'player' && tower.attackReadyAt > 0));
 });
 
-test('destroyed towers reward their owner once for summoned, minion or neutral attacks, respecting OFF and the SP cap', () => {
-  for (const owner of ['player', 'enemy'] as const) for (const kind of ['summoned', 'minion', 'neutral'] as const) for (const enabled of [false, true]) for (const initial of [10, 49, 50]) {
+test('destroyed towers reward their owner once for summoned, minion or neutral attacks, respecting OFF and allowing excess SP', () => {
+  for (const owner of ['player', 'enemy'] as const) for (const kind of ['summoned', 'minion', 'neutral'] as const) for (const enabled of [false, true]) for (const initial of [10, 49, 50, 65.25]) {
     const sim = create({ towers: { enabled: true, hp: 1 }, sp: { passive: { enabled: false }, towerLoss: { enabled, amount: 7 } } });
     for (const tower of sim.state.structures) tower.attackReadyAt = 1e6;
     const tower = sim.state.structures.find((entity) => entity.side === owner)!;
@@ -282,16 +282,16 @@ test('destroyed towers reward their owner once for summoned, minion or neutral a
     sim.state.sp[owner] = initial; sim.state.sp[opponent] = 10;
     sim.update(FIXED_STEP);
     assert.equal(tower.hp, 0);
-    near(sim.state.sp[owner], enabled ? Math.min(50, initial + 7) : initial);
+    near(sim.state.sp[owner], enabled ? initial + 7 : initial);
     assert.equal(sim.state.sp[opponent], 10, 'the attacking side receives no tower loss reward');
     assert.ok(!sim.state.structures.some((entity) => entity.id === tower.id));
     sim.update(1);
-    near(sim.state.sp[owner], enabled ? Math.min(50, initial + 7) : initial, 1e-6);
+    near(sim.state.sp[owner], enabled ? initial + 7 : initial, 1e-6);
     near(sim.state.sp[opponent], 10);
   }
 });
 
-test('simultaneous tower losses pay per tower and to each owner independently', () => {
+test('simultaneous tower losses pay full rewards per tower above the passive cap to each owner independently', () => {
   const sim = create({ towers: { enabled: true, count: 2, hp: 1 }, sp: { passive: { enabled: false }, towerLoss: { enabled: true, amount: 5 } } });
   for (const tower of sim.state.structures) {
     tower.attackReadyAt = 1e6;
@@ -299,10 +299,10 @@ test('simultaneous tower losses pay per tower and to each owner independently', 
     const attacker = spawn(sim, opponent, 'hunter');
     Object.assign(attacker, { x: tower.x, y: tower.y + (tower.side === 'player' ? -0.8 : 0.8), target: tower.id, attackReadyAt: 0 });
   }
-  sim.state.sp.player = 0; sim.state.sp.enemy = 0;
+  sim.state.sp.player = 50; sim.state.sp.enemy = 65.25;
   sim.update(FIXED_STEP);
   assert.equal(sim.state.structures.length, 0);
-  assert.deepEqual(sim.state.sp, { player: 10, enemy: 10 });
+  assert.deepEqual(sim.state.sp, { player: 60, enemy: 75.25 });
 });
 
 test('burn and ice tower deaths pay their owner once, including overlapping persistent damage', () => {
@@ -338,13 +338,14 @@ test('box damage income and tower loss rewards remain independent', () => {
   near(sim.state.sp.enemy, 0);
 });
 
-test('catapult and oil can independently damage enemies and reward neutral kills to the owning player', () => {
-  for (const kind of ['catapult', 'oil'] as const) {
+test('catapult and oil can independently reward neutral kills above the passive cap to either owner', () => {
+  for (const kind of ['catapult', 'oil'] as const) for (const side of ['player', 'enemy'] as const) for (const initial of [0, 50, 65.25]) {
     const sim = create({ fortAttacks: { [kind]: { enabled: true, damage: 30 } } });
-    const victim = spawn(sim, 'enemy', 'shield'); victim.x = 6; victim.y = 17.3; victim.hp = 7; victim.kind = 'neutral'; victim.side = 'neutral'; victim.reward = 4;
-    sim.state.sp.player = 0; sim.update(1);
-    assert.equal(victim.hp, 0); near(sim.state.sp.player, 4);
-    assert.ok(sim.state.effects.some((effect) => effect.kind === kind) || sim.state.forts.player[`${kind}ReadyAt`] > 0);
+    const other = side === 'player' ? 'enemy' : 'player';
+    const victim = spawn(sim, other, 'shield'); victim.x = 6; victim.y = side === 'player' ? 17.3 : 2.7; victim.hp = 7; victim.kind = 'neutral'; victim.side = 'neutral'; victim.reward = 4;
+    sim.state.sp[side] = initial; sim.update(1);
+    assert.equal(victim.hp, 0); near(sim.state.sp[side], initial + 4);
+    assert.ok(sim.state.effects.some((effect) => effect.kind === kind) || sim.state.forts[side][`${kind}ReadyAt`] > 0);
   }
 });
 
@@ -368,6 +369,22 @@ test('SP box grants fractional actual damage rewards, excludes excess damage and
   noRespawn.update(FIXED_STEP); assert.equal(noRespawn.state.structures[0].hp, 25, 'hunter deals base five, not neutral ten');
   noRespawn.state.structures[0].hp = 1; second.attackReadyAt = 0; noRespawn.update(FIXED_STEP);
   noRespawn.state.units = []; noRespawn.update(5); assert.equal(noRespawn.state.structures.length, 0);
+});
+
+test('SP box damage pays full fractional rewards below, at and above the passive cap to either side', () => {
+  for (const side of ['player', 'enemy'] as const) for (const initial of [49.75, 50, 65.25]) {
+    const sim = create({ spBox: { enabled: true, hp: 3, spPerDamage: 0.25 }, sp: { passive: { enabled: true, amount: 1 } } });
+    const hunter = spawn(sim, side, 'hunter');
+    hunter.x = 6; hunter.y = side === 'player' ? 12 : 8; hunter.attackReadyAt = 0;
+    sim.state.sp[side] = initial;
+    sim.update(FIXED_STEP);
+    const passive = initial < 50 ? FIXED_STEP : 0;
+    near(sim.state.sp[side], initial + passive + 0.75);
+    assert.equal(sim.state.structures.length, 0, 'the box only pays for its three remaining HP');
+    const balance = sim.state.sp[side];
+    sim.update(1);
+    assert.equal(sim.state.sp[side], balance, 'passive income pauses after the reward crosses its maximum');
+  }
 });
 
 test('one to three boxes use symmetric center positions and independently preserve respawn positions and timers', () => {
@@ -410,13 +427,17 @@ test('only summoned units target and damage the common box, with access from all
   }
 });
 
-test('SP categories independently enable, scale and cap summoned, normal/elite minion and neutral rewards', () => {
-  for (const kind of ['summoned', 'minion', 'elite', 'neutral'] as const) for (const enabled of [true, false]) {
-    const sim = create({ sp: { maximum: 13, passive: { enabled: false }, [kind]: { enabled, amount: 4, multiplier: 0.5 } } });
-    const attacker = spawn(sim, 'player', 'hunter'); attacker.x = 6; attacker.y = 12; attacker.attack = 100; attacker.attackReadyAt = 0;
-    const victim = spawn(sim, 'enemy', 'shield'); victim.x = 6; victim.y = 11.2; victim.hp = 1;
+test('SP categories independently enable and scale full fractional summoned, normal/elite minion and neutral rewards beyond a custom passive cap', () => {
+  for (const kind of ['summoned', 'minion', 'elite', 'neutral'] as const) for (const enabled of [true, false]) for (const side of ['player', 'enemy'] as const) for (const initial of [12.5, 13, 20.25]) {
+    const sim = create({ sp: { maximum: 13, passive: { enabled: false }, [kind]: { enabled, amount: 3, multiplier: 0.5 } } });
+    const other = side === 'player' ? 'enemy' : 'player';
+    const y = side === 'player' ? 12 : 8;
+    const attacker = spawn(sim, side, 'hunter'); attacker.x = 6; attacker.y = y; attacker.attack = 100; attacker.attackReadyAt = 0;
+    const victim = spawn(sim, other, 'shield'); victim.x = 6; victim.y = y + (side === 'player' ? -0.8 : 0.8); victim.hp = 1;
     if (kind === 'neutral') { victim.kind = 'neutral'; victim.side = 'neutral'; }
     if (kind === 'minion' || kind === 'elite') { victim.kind = 'minion'; victim.elite = kind === 'elite'; }
-    sim.state.sp.player = 12; sim.update(FIXED_STEP); near(sim.state.sp.player, enabled ? 13 : 12);
+    sim.state.sp[side] = initial; sim.update(FIXED_STEP);
+    assert.equal(victim.hp, 0);
+    near(sim.state.sp[side], initial + (enabled ? 1.5 : 0));
   }
 });

@@ -1,14 +1,14 @@
 # 공개 PVP 배포 개발단위
 
 대응 기획: [로비의 비공개 방과 방 수명](../기획서/화면구성.md), [경기 설정의 비공개 PVP](../기획서/게임모드.md).
-Vercel 화면과 Render 단일 WebSocket 서버로 서로 다른 기기의 비공개 PVP를 제공한다. 로그인·6자리 코드·서버 전투 판정·덱 비공개·설정 공유·이탈·재대전 규칙을 유지한다. 아래 배포 검증은 2026-09-30 당시의 세 프리셋 기록이며 2026-10-01 팝업 변경의 공개 배포 검증은 별도다.
-2026-09-30 실제 서버 배포와 공개 브라우저 두 탭의 대전·재대전을 검증했다. 서로 다른 기기·네트워크 검증은 미확인으로 구분한다.
+Vercel 화면과 Render 단일 WebSocket 서버로 서로 다른 기기의 비공개 PVP를 제공한다. 로그인·6자리 코드·서버 전투 판정·덱 비공개·설정 공유·이탈·재대전 규칙을 유지한다. 날짜별 기록은 당시 구현과 확인 범위의 증거로 보존한다. 2026-10-01에는 경기 설정 팝업·환경 선택·포탑 소유진영 SP 보상을 공개 배포했다.
+2026-10-01 PR #9의 동일 main 커밋을 Vercel Production·Render에 배포하고 공개 브라우저 두 탭의 대전·재대전을 확인했다. 서로 다른 기기·네트워크 검증은 미확인으로 구분한다.
 
 ## Render 단일 WebSocket 서버 배포
 
 - 기획: [비공개 방과 초대 코드](../기획서/화면구성.md#로비), [방 수명](../기획서/화면구성.md#방-수명과-오류-처리--2026-09-30-확정).
 - 기존 `server/start.mjs`와 `server/multiplayer.mjs`를 Node.js 24.19.0의 단일 프로세스에서 실행한다. 방과 전투 상태를 메모리에서 공유하므로 복수 인스턴스로 나누지 않는다.
-- 현재 서비스는 Render 대시보드에서 수동 구성한 Singapore 지역 Free 단일 Web Service이며 `main`의 `9291655`를 배포했다. `Auto-Deploy=On Commit`으로 main 커밋을 자동 반영한다. `render.yaml`의 브랜치는 이전 작업 브랜치 `0.3.1-private-connection-fix`로 현재 서비스 설정과 다르다.
+- 현재 서비스는 Render 대시보드에서 수동 구성한 Singapore 지역 Free 단일 Web Service이며 PR #9의 `main`·`ab8c4ae`를 배포했다. `Auto-Deploy=On Commit`으로 main 커밋을 자동 반영한다. `render.yaml`의 브랜치는 이전 작업 브랜치 `0.3.1-private-connection-fix`로 현재 서비스 설정과 다르다.
 - 실제 빌드는 `npm ci && npm run build`, 시작은 `npm run start`, `NODE_VERSION=24.19.0`, 상태 확인은 `/healthz`다. Render가 제공한 `PORT`를 사용해 `0.0.0.0`에서 접속을 받는다.
 - `MULTIPLAYER_ALLOWED_ORIGINS=https://surf-prototype.vercel.app`로 Production 출처만 허용한다. Preview 검증은 해당 출처를 별도로 추가해야 한다.
 - `/healthz`의 정상 응답과 `/ws`의 WebSocket 연결을 확인한다. 상태 확인 응답에 방·덱·인증 정보를 넣지 않는다.
@@ -47,5 +47,17 @@ Vercel 화면과 Render 단일 WebSocket 서버로 서로 다른 기기의 비�
 - 배포된 공개 WebSocket에서 기본·자동획득 금지·처치획득 금지 세 모드를 확인했다. `room.rules`는 각 로컬 preset과 동일하고 양쪽의 모드·규칙이 같았다. 상대 덱 비공개, 구조물 없음, 경기 시작, 양쪽 사냥꾼 소환, 참가자 이탈 후 방장 승리를 확인했으며 오류는 없었다.
 - 실제 Production 브라우저 두 탭에서 기본 모드 방 `410332`, 성 도로·맑음 환경을 사용했다. 방장 전사·참가자 궁수 선택과 준비, 양쪽 소환, 경기 경과 약 22초에 참가자 이탈 후 방장 승리와 성채 HP 874/874를 확인했다. 양쪽 콘솔 오류는 0건이었다.
 - 확인 범위는 공개 서버의 WebSocket 클라이언트와 한 브라우저의 독립된 두 탭이다. 서로 다른 기기·네트워크, 실제 휴대기기 터치와 장기 밸런스 검증은 이번 확인에 포함하지 않는다. 앞선 `5df7f3a` 배포와 대전·재대전 기록은 당시 결과로 보존한다.
+
+## 경기 설정 팝업 Production 검증 — 2026-10-01
+
+- 사용자 PR 검토와 명시적인 배포 요청 후 [PR #9](https://github.com/seonhjeo/SurfPrototype/pull/9)를 2026-10-01 09:42:58 KST에 병합했다. Production 커밋은 `ab8c4ae90967894f0874a826400177680ceedee2`다. [main의 GitHub CI](https://github.com/seonhjeo/SurfPrototype/actions/runs/36797547872)가 SUCCESS다.
+- 배포 전 로컬 검증은 자동 테스트 117/117개·타입 검사 포함 빌드 통과다. 기존 Phaser 번들 크기 500 KB 경고만 남았으며 [구현 검증](게임모드.md#환경-선택과-포탑-파괴-보상-검증--2026-10-01)을 따른다.
+- Vercel Production 배포 `64Wk33jgsehftSz1Y9MzbxzJCNfk`, GitHub 배포 `6773372853`은 위 main SHA와 같고 bot/API 기준 completed·SUCCESS다. 완료 시각은 2026-10-01 09:43:15 KST다. [고정 공개 URL](https://surf-prototype.vercel.app/)과 [고유 배포 URL](https://surf-prototype-4bujr9w2i-hoya14.vercel.app)을 확인했으며 고정 URL은 HTTP 200이다.
+- Render 서비스 `srv-daubkvdg1s2s73c9ouk0`의 배포 `dep-dauqp4psrm7s73ba6fgg`가 45.4초 후 같은 main SHA의 Live 상태다. [상태 확인](https://surf-multiplayer.onrender.com/healthz)은 HTTP 200이며 공개 WebSocket은 `wss://surf-multiplayer.onrender.com/ws`다.
+- 공개 WebSocket에서 기본 무작위 설정의 방 생성·양쪽 규칙/환경 공유·상대 덱 비공개·시작 SP 5·전투·참가자 이탈 승리를 확인했다. 성 도로 고정/무작위 날씨와 무작위 맵/비 고정의 혼합 정책도 양쪽에 같았다.
+- 숲·안개 고정·이동 0라인·포탑 3배치 라인×라인당 2개(양 진영 총 12개)·상자 2개·소유 포탑 파괴 보상 9 SP의 생성/공유/양쪽 소환을 확인했다. 다른 SP 획득을 끈 조건에서 약 2.733초에 참가자 포탑 파괴 후 소유 참가자의 SP가 40→49, 공격한 방장은 0을 유지했다. 양 클라이언트 상태가 같았으며 1초 뒤에도 중복 지급이 없었다. 테스트 방·연결을 모두 정리했다.
+- 실제 Production 브라우저의 독립 두 탭에서 방 `513168`의 숲·비 고정, 이동 0라인·포탑 배치 2라인×라인당 1개·포탑 소유진영 파괴 보상 7 SP가 양쪽에 같음을 확인했다. 전사/궁수 선택·양쪽 준비·실제 소환 뒤 약 1분 50초에 방장 성채 0·참가자 성채 910으로 자연 종료했다.
+- 양쪽 재대전 선택 후 고정 환경·규칙을 읽기 전용 설정에서 확인하고 새 덱 선택·준비로 전투를 시작했다. 표시 시간 04:59·SP 5·양 성채 HP 1,000으로 초기화했으며 약 7초 후 참가자 이탈로 방장 승리와 종료 사유를 확인했다. 두 탭의 콘솔 오류·경고는 0건이며 테스트 방은 정리했다.
+- 공개 브라우저 확인은 한 브라우저의 독립된 두 탭과 공개 서버 연결이다. 서로 다른 기기·네트워크, 실제 휴대기기 터치와 장기 사용자 밸런스는 확인하지 않았다. 실제 사용자 밸런스 개발단위는 미완료로 유지하며 과거 배포 기록은 당시 증거로 보존한다.
 
 [README의 배포 절차](../../README.md#render-websocket-서버-배포) · [Render Web Service 설정](https://render.com/docs/web-services) · [개발문서 인덱스](index.md)

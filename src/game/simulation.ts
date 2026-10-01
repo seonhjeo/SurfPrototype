@@ -101,7 +101,7 @@ export class Simulation {
     this.state = {
       time: 0, gameMode, map: options.map, weather: options.weather,
       decks: { player: completeDeck(options.decks.player, () => this.random()), enemy: completeDeck(options.decks.enemy, () => this.random()) },
-      sp: { player: Math.min(rules.sp.initial, rules.sp.maximum), enemy: Math.min(rules.sp.initial, rules.sp.maximum) },
+      sp: { player: rules.sp.initial, enemy: rules.sp.initial },
       rules, structures: [],
       forts: { player: makeFort(19), enemy: makeFort(1) }, units: [], projectiles: [],
       zones: [], effects: [], wave: 0, warnings: [], result: null,
@@ -177,7 +177,10 @@ export class Simulation {
     this.state.time = Math.min(MATCH_DURATION, Math.round((this.state.time + dt) / FIXED_STEP) * FIXED_STEP);
     const now = this.state.time;
     const sp = this.state.rules.sp;
-    for (const side of SIDES) this.state.sp[side] = Math.min(sp.maximum, this.state.sp[side] + (sp.passive.enabled ? sp.passive.amount : 0) * dt);
+    // The maximum stops passive income; rewards above it remain available to spend.
+    if (sp.passive.enabled && sp.passive.amount > 0) for (const side of SIDES) {
+      if (this.state.sp[side] < sp.maximum) this.state.sp[side] = Math.min(sp.maximum, this.state.sp[side] + sp.passive.amount * dt);
+    }
     this.spawnWaves();
     for (const side of this.aiSides) this.updateAI(side);
     this.updatePersistentEffects();
@@ -597,7 +600,7 @@ export class Simulation {
     }
   }
 
-  private awardSp(side: Side, amount: number): void { this.state.sp[side] = Math.min(this.state.rules.sp.maximum, this.state.sp[side] + amount); }
+  private awardSp(side: Side, amount: number): void { this.state.sp[side] += amount; }
 
   private burn(target: Target, sourceSide: EntitySide, canDamageBox = false): void {
     const entity = this.targetEntity(target);
